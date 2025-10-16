@@ -1,0 +1,73 @@
+.btn {
+	outline: 0;
+	border: 0;
+	border-radius: 3px;
+	padding: 7px;
+	font-size: .75rem;
+	font-weight: 700;
+	min-height: 25px;
+}
+
+.btn.primary {
+	background-color: #57b;
+	color: #fff;
+}
+.btn.secondary {
+	background-color: #178;
+	color: #fff;
+}
+
+/* ---------- CARD BUTTON ---------- */
+/* ----------     HTML    ---------- */
+/*
+<a href="#">
+	<div class="cl t24 pcard">
+		<div class="rw pcard-header"></div>
+		<div class="rw pcard-icon"><i class="fas fa-user-graduate"></i></div>
+		<div class="rw pcard-title">TITLE</div>
+		<div class="rw pcard-subtitle">SUBTITLE</div>
+		<div class="rw pcard-footer"></div>
+	</div>
+</a>
+*/
+/* ----------     CSS    ---------- */
+.pcard {
+	width: 100%;
+	min-height: 225px;
+	height: 225px;
+	background: #f60; 
+	border-radius: 5px;
+}
+.pcard-header {
+	height: 40px; 
+	min-height: 40px;
+}
+.pcard-title {
+	height: 40px; 
+	min-height: 40px; 
+	text-align: center; 
+	line-height: 40px; 
+	font-size: 40px; 
+	font-weight: 700; 
+	color: #fff;
+}
+.pcard-subtitle {
+	height: 30px; 
+	min-height: 30px;
+	color: #fff;
+	text-align: center;
+	font-size: 30px;
+	line-height: 30px;
+}
+.pcard-icon {
+	height: 70px; 
+	min-height: 70px;
+	color: #fff;
+	text-align: center;
+	font-size: 60px;
+	line-height: 70px;
+}
+.pcard-footer {
+	height: 45px; 
+	min-height: 45px;
+}

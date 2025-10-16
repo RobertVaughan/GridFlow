@@ -1,0 +1,5 @@
+/* Subtle styling for dialog HTML emitted by the package */
+.dialog-window .u strong,
+.dialog-window .a strong { opacity: .8; }
+.dialog-window .u { margin: 4px 0; }
+.dialog-window .a { margin: 4px 0; }
