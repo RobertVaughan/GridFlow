@@ -355,74 +355,82 @@
     </div>
 
     <!-- Slideout content templates -->
-<template id="tpl-left-nodes">
-  <div class="panel-section">
-    <h4 class="mgT0">Node Palette</h4>
-    <div class="pill-grid">
-      <button class="pill">Math</button>
-      <button class="pill">String</button>
-      <button class="pill">HTTP</button>
-      <button class="pill">Ollama</button>
-    </div>
-    <div class="inline-field mgT10">
-      <label>Search</label>
-      <input type="text" placeholder="Search nodes…"/>
-    </div>
-    <!-- You can render your real node list here -->
-  </div>
-</template>
+    <template id="tpl-left-nodes">
+      <div class="panel-section">
+        <h4 class="mgT0">Node Palette</h4>
+        <div class="pill-grid">
+          <button class="pill">Math</button>
+          <button class="pill">String</button>
+          <button class="pill">HTTP</button>
+          <button class="pill">Ollama</button>
+        </div>
+        <div class="inline-field mgT10">
+          <label>Search</label>
+          <input type="text" placeholder="Search nodes…"/>
+        </div>
+        <!-- You can render your real node list here -->
+      </div>
+    </template>
 
-<template id="tpl-left-workflows">
-  <div class="panel-section">
-    <h4 class="mgT0">Workflows</h4>
-    <ul class="list">
-      <li><button class="link">Chat Playground</button></li>
-      <li><button class="link">Data Import</button></li>
-      <li><button class="link">Image Pipeline</button></li>
-    </ul>
-  </div>
-</template>
+    <template id="tpl-left-workflows">
+      <div class="panel-section">
+        <h4 class="mgT0">Workflows</h4>
+        <ul class="list">
+          <li><button class="link">Chat Playground</button></li>
+          <li><button class="link">Data Import</button></li>
+          <li><button class="link">Image Pipeline</button></li>
+        </ul>
+      </div>
+    </template>
 
-<template id="tpl-left-custom">
-  <div class="panel-section">
-    <h4 class="mgT0">Custom</h4>
-    <p class="muted">Add or manage custom nodes.</p>
-    <button class="btn">Open Node Builder</button>
-  </div>
-</template>
+    <template id="tpl-left-custom">
+      <div class="panel-section">
+        <h4 class="mgT0">Custom</h4>
+        <p class="muted">Add or manage custom nodes.</p>
+        <button class="btn">Open Node Builder</button>
+      </div>
+    </template>
 
-<template id="tpl-right-history">
-  <div class="panel-section">
-    <h4 class="mgT0">History</h4>
-    <ul class="list">
-      <li>09:42 — Ran graph “Chat Playground”</li>
-      <li>09:31 — Edited node “Ollama Model”</li>
-      <li>09:28 — Imported project</li>
-    </ul>
-  </div>
-</template>
+    <template id="tpl-right-history">
+      <div class="panel-section">
+        <h4 class="mgT0">History</h4>
+        <ul class="list">
+          <li>09:42 — Ran graph “Chat Playground”</li>
+          <li>09:31 — Edited node “Ollama Model”</li>
+          <li>09:28 — Imported project</li>
+        </ul>
+      </div>
+    </template>
 
-<template id="tpl-right-queue">
-  <div class="panel-section">
-    <h4 class="mgT0">Queue</h4>
-    <p class="muted">No jobs in queue.</p>
-  </div>
-</template>
+    <template id="tpl-right-queue">
+      <div class="panel-section">
+        <h4 class="mgT0">Queue</h4>
+        <p class="muted">No jobs in queue.</p>
+      </div>
+    </template>
 
-    
-    <!-- GridFlow core (order matters) -->
+    <!-- Core & renderer -->
     <script type="module" src="js/core/store.js"></script>
     <script type="module" src="js/core/plugins.js"></script>
-    <script type="module" src="js/custom-nodes.js"></script>
-    <script type="module" src="js/core/renderer.js"></script>
-    <script type="module" src="js/add-node-bridge.js"></script>
+    <script type="module" src="js/renderer.js"></script>
 
-    <!-- Your nodes + app boot -->
+    <!-- Panels & UI -->
+    <script type="module" src="js/panels/nodes-panel.js"></script>
+    <script type="module" src="js/ui-bridge.js"></script>
+
+    <!-- Node creation bridges -->
+    <script type="module" src="js/add-node-bridge.js"></script>
+    <script type="module" src="js/node-palette-attach.js"></script>
+
+    <!-- Built-in and custom node packs -->
     <script type="module" src="js/nodes/builtin.js"></script>
     <script type="module" src="js/nodes/ollama.js"></script>
+
+    <!-- Auto-discovery loader for packs in /custom-nodes/* -->
+    <script type="module" src="js/custom-nodes.js"></script>
+
+    <!-- Your app last -->
     <script type="module" src="js/app.js"></script>
 
-    <!-- ✅ Single bridge script (menus, slideouts, footer toggles) -->
-    <script type="module" src="js/ui-bridge.js"></script>
   </body>
 </html>
