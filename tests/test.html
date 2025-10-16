@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>GridFlow Tests</title></head>
+<body>
+  <h1>GridFlow Tests</h1>
+  <pre id="out"></pre>
+  <script type="module">
+    import { createEmptyGraph, addNode, getGraph } from "../js/core/store.js";
+    import "../js/core/plugins.js";
+    import "../js/nodes/starter.js";
+    const out = document.getElementById("out");
+    function log(x){ out.textContent += x + "\n"; }
+    // Test 1: create graph
+    const g = createEmptyGraph();
+    log("Graph OK: "+ (!!g.id && g.nodes.length===0));
+    // Test 2: register node and add
+    const n = { id: crypto.randomUUID(), type: "math.add", title: "Add", x:10, y:10, inputs:[{id:"a",name:"A",dataType:"number"},{id:"b",name:"B",dataType:"number"}], outputs:[{id:"sum",name:"Sum",dataType:"number"}] };
+    addNode(n);
+    log("Nodes length >=1: " + (getGraph().nodes.length>=1));
+  </script>
+</body>
+</html>

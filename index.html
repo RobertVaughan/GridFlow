@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <title>GridFlow</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- ✅ Single merged stylesheet (NodeSmith + GridFlow + bridge tweaks) -->
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/paradox.css" />
+
+    <!-- Tabler Icons (optional; shows footer/toolbar icons) -->
+    <!-- in <head> -->
+    <link rel="preconnect" href="https://unpkg.com" crossorigin />
+    <link href="https://unpkg.com/@tabler/icons-webfont@2.47.0/tabler-icons.min.css" rel="stylesheet" />
+  </head>
+  <body>
+    <div class="app">
+      <!-- Header -->
+      <header class="hero">
+        <div id="header-left">
+          <span class="dot" aria-hidden="true"></span>
+          <strong>GridFlow</strong>
+
+          <!-- File menu -->
+          <div class="menu mgL10">
+            <button class="btn" id="menu-file-btn" aria-haspopup="true" aria-expanded="false">File ▾</button>
+            <div class="menu-panel" id="menu-file" hidden>
+              <button class="menu-item" id="btnNew">New Project</button>
+              <button class="menu-item" id="btnOpen">Open…</button>
+              <button class="menu-item" id="btnSave">Save</button>
+              <hr />
+              <button class="menu-item" id="btnExport">Export JSON</button>
+              <button class="menu-item" id="btnImport">Import JSON</button>
+            </div>
+          </div>
+          <!-- Edit menu -->
+          <div class="menu">
+            <button class="btn" id="menu-edit-btn" aria-haspopup="true" aria-expanded="false">Edit ▾</button>
+            <div class="menu-panel" id="menu-edit" hidden>
+              <button class="menu-item" id="btnUndo">Undo</button>
+              <button class="menu-item" id="btnRedo">Redo</button>
+              <hr />
+              <button class="menu-item" id="btnSelectAll">Select All</button>
+              <button class="menu-item" id="btnDelete">Delete</button>
+            </div>
+          </div>
+
+          <!-- View menu -->
+          <div class="menu">
+            <button class="btn" id="menu-view-btn" aria-haspopup="true" aria-expanded="false">View ▾</button>
+            <div class="menu-panel" id="menu-view" hidden>
+              <button class="menu-item" id="btnCenter">Center on First Node</button>
+              <button class="menu-item" id="btnFit">Fit to View</button>
+            </div>
+          </div>
+          <div id="header-right" class="toolbar"></div>
+        </div>
+      </header>
+
+      <!-- Left rail -->
+      <nav class="rail rail-left" aria-label="Left tools">
+        <button class="rail-btn" data-open="left:nodes" title="Nodes" aria-label="Nodes">
+          <i class="ti ti-box" aria-hidden="true"></i><span>Nodes</span>
+        </button>
+        <button class="rail-btn" data-open="left:workflows" title="Workflows" aria-label="Workflows">
+          <i class="ti ti-git-branch" aria-hidden="true"></i><span>Workflows</span>
+        </button>
+        <button class="rail-btn" data-open="left:custom" title="Custom" aria-label="Custom">
+          <i class="ti ti-star" aria-hidden="true"></i><span>Custom</span>
+        </button>
+        <div class="rail-spacer"></div>
+        <button class="rail-btn" id="open-settings" data-open="left:settings" title="Settings" aria-label="Settings">
+          <i class="ti ti-settings" aria-hidden="true"></i><span>Settings</span>
+        </button>
+      </nav>
+
+      <!-- Right rail -->
+      <nav class="rail rail-right" aria-label="Right tools">
+        <button class="rail-btn" data-open="right:history" title="History" aria-label="History">
+          <i class="ti ti-clock" aria-hidden="true"></i><span>History</span>
+        </button>
+        <button class="rail-btn" data-open="right:queue" title="Queue" aria-label="Queue">
+          <i class="ti ti-list-details" aria-hidden="true"></i><span>Queue</span>
+        </button>
+      </nav>
+
+      <!-- Slideouts -->
+      <aside id="panel-left" class="slideout slideout-left" aria-hidden="true" hidden>
+        <header class="slideout__hdr">
+          <h3 class="mg0" id="slideout-left-title">Title</h3>
+          <button class="btn slideout__close" data-close="left" aria-label="Close">✕</button>
+        </header>
+        <div class="slideout__body" id="slideout-left-body"></div>
+      </aside>
+
+      <aside id="panel-right" class="slideout slideout-right" aria-hidden="true" hidden>
+        <header class="slideout__hdr">
+          <h3 class="mg0" id="slideout-right-title">Title</h3>
+          <button class="btn slideout__close" data-close="right" aria-label="Close">✕</button>
+        </header>
+        <div class="slideout__body" id="slideout-right-body"></div>
+      </aside>
+
+      <!-- Graph viewport -->
+      <main id="graph-viewport" class="graph-viewport">
+        <div class="canvas-card">
+          <div class="card-hdr">
+            <h3 class="card-title mg0">Graph</h3>
+          </div>
+          <div class="card-body canvas-body">
+            <div class="canvas-wrap" id="stageWrap">
+              <canvas id="gridCanvas" class="grid-canvas" aria-hidden="true"></canvas>
+              <canvas id="edgeCanvas" class="edge-canvas" aria-hidden="true"></canvas>
+              <div id="nodeLayer" class="node-layer" role="application" aria-label="Nodes layer"></div>
+              <div id="marquee" class="marquee" aria-hidden="true"></div>
+              <canvas id="minimap" class="minimap" aria-hidden="true"></canvas>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- SETTINGS MODAL -->
+      <div
+        id="settings-modal"
+        class="modal"
+        aria-hidden="true"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        hidden>
+        <div class="modal__scrim" data-close="settings"></div>
+        <div class="modal__dialog settings-dialog" role="document">
+          <header class="modal__hdr">
+            <h3 id="settings-title" class="mg0">Settings</h3>
+            <div class="settings-actions">
+              <button class="btn" id="settings-reset">Reset</button>
+              <button class="btn" id="settings-save">Save</button>
+              <button class="btn modal__close" data-close="settings" aria-label="Close settings">✕</button>
+            </div>
+          </header>
+          <div class="settings-layout">
+            <!-- side tabs -->
+            <nav class="settings-tabs" aria-label="Settings sections">
+              <button class="settings-tab active" data-tab="app">App Settings</button>
+              <button class="settings-tab" data-tab="litegraph">Lite Graph</button>
+              <button class="settings-tab" data-tab="appearance">Appearance</button>
+              <hr class="settings-divider" />
+              <button class="settings-tab" data-tab="keybinding">Keybinding</button>
+              <button class="settings-tab" data-tab="extensions">Extensions</button>
+              <button class="settings-tab" data-tab="about">About</button>
+              <button class="settings-tab" data-tab="help">Help</button>
+            </nav>
+
+            <!-- panels -->
+            <section class="settings-panel active" id="panel-app" tabindex="0">
+              <h4>App Settings</h4>
+              <div class="form-grid">
+                <label class="switch">
+                  <input type="checkbox" data-setting="app.showCanvasMenu" />
+                  <span>Show graph canvas menu</span>
+                </label>
+
+                <label>
+                  Canvas navigation mode
+                  <select data-setting="app.navMode">
+                    <option value="drag">Drag Navigating</option>
+                    <option value="pan">Pan Only</option>
+                  </select>
+                </label>
+
+                <label>
+                  Maximum FPS
+                  <input type="number" min="0" step="1" data-setting="app.maxFPS" />
+                </label>
+
+                <label class="switch">
+                  <input type="checkbox" data-setting="app.showInfo" />
+                  <span>Show canvas info (fps etc.)</span>
+                </label>
+
+                <label>
+                  Zoom speed
+                  <input type="number" step="0.1" min="0.1" max="3" data-setting="app.zoomSpeed" />
+                </label>
+              </div>
+            </section>
+
+            <section class="settings-panel" id="panel-litegraph" tabindex="0">
+              <h4>Lite Graph</h4>
+
+              <h5>Canvas</h5>
+              <div class="form-grid">
+                <label>
+                  Low quality rendering zoom threshold
+                  <input type="number" step="0.1" min="0" max="2" data-setting="lg.lowQualityThreshold" />
+                </label>
+
+                <label class="switch">
+                  <input type="checkbox" id="snapToggle" data-setting="lg.snapToGrid" />
+                  <span>Always snap to grid</span>
+                </label>
+
+                <label>
+                  Snap to grid size
+                  <input type="number" id="gridSize" step="1" min="1" data-setting="lg.gridSize" />
+                </label>
+
+                <label class="switch">
+                  <input type="checkbox" data-setting="lg.fastZoomShortcut" />
+                  <span>Enable fast-zoom (Ctrl+Shift+Drag)</span>
+                </label>
+              </div>
+
+              <h5>Graph</h5>
+              <div class="form-grid">
+                <label>
+                  Link render mode
+                  <select data-setting="lg.linkRenderMode">
+                    <option value="straight">Straight</option>
+                    <option value="spline">Spline</option>
+                  </select>
+                </label>
+
+                <label>
+                  Link midpoint markers
+                  <select data-setting="lg.linkMidpointMarkers">
+                    <option value="none">None</option>
+                    <option value="circle">Circle</option>
+                  </select>
+                </label>
+
+                <label>
+                  Reroute spline offset
+                  <input type="number" min="0" step="1" data-setting="lg.rerouteOffset" />
+                </label>
+              </div>
+
+              <h5>Node</h5>
+              <div class="form-grid">
+                <label class="switch">
+                  <input type="checkbox" data-setting="lg.keepLinksOnDelete" />
+                  <span>Keep all links when deleting nodes</span>
+                </label>
+
+                <label class="switch">
+                  <input type="checkbox" data-setting="lg.enableTooltips" />
+                  <span>Enable tooltips</span>
+                </label>
+
+                <label>
+                  Tooltip delay (ms)
+                  <input type="number" min="0" step="50" data-setting="lg.tooltipDelay" />
+                </label>
+              </div>
+            </section>
+
+            <section class="settings-panel" id="panel-appearance" tabindex="0">
+              <h4>Appearance</h4>
+              <div class="form-grid">
+                <label>
+                  Color palette
+                  <select id="themeSelect" data-setting="ui.theme">
+                    <option value="dark">Dark (Default)</option>
+                  </select>
+                </label>
+
+                <label>
+                  Canvas background image URL
+                  <input type="url" placeholder="Image URL" data-setting="ui.canvasBgURL" />
+                </label>
+
+                <label>
+                  Node opacity
+                  <input type="number" min="0.1" max="1" step="0.05" data-setting="ui.nodeOpacity" />
+                </label>
+
+                <label>
+                  Textarea widget font size
+                  <input type="number" min="8" max="32" step="1" data-setting="ui.textareaFont" />
+                </label>
+
+                <label class="switch">
+                  <input type="checkbox" data-setting="ui.unifiedSidebarWidth" />
+                  <span>Unified sidebar width</span>
+                </label>
+
+                <label>
+                  Tree explorer item padding
+                  <input type="number" min="0" max="16" step="1" data-setting="ui.treePadding" />
+                </label>
+              </div>
+            </section>
+
+            <section class="settings-panel" id="panel-keybinding" tabindex="0">
+              <h4>Keybinding</h4>
+              <p>Coming soon…</p>
+            </section>
+
+            <section class="settings-panel" id="panel-extensions" tabindex="0">
+              <h4>Extensions</h4>
+              <p>Coming soon…</p>
+            </section>
+
+            <section class="settings-panel" id="panel-about" tabindex="0">
+              <h4>About</h4>
+              <p>NodeSmith — node-based workflow playground.</p>
+            </section>
+
+            <section class="settings-panel" id="panel-help" tabindex="0">
+              <h4>Help</h4>
+              <p>Need a hand? Ping the Help modal from View → Help.</p>
+            </section>
+          </div>
+
+          <footer class="modal__ftr">
+            <span class="muted">Changes persist automatically when you click Save.</span>
+          </footer>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <footer class="app-footer" role="contentinfo">
+        <div class="footer-left">
+          <button class="btn" id="footer-run">Run</button>
+          <button class="btn" id="footer-stop">Stop</button>
+          <button class="btn" id="footer-clear">Clear</button>
+        </div>
+        <div class="footer-center">
+          <span id="status-label">Ready</span>
+        </div>
+        <div class="footer-right">
+          <button class="btn icon" id="footer-zoom-fit" title="Fit to View" aria-label="Fit to View">
+            <i class="ti ti-maximize" aria-hidden="true"></i>
+          </button>
+          <span id="footer-zoom-label" class="zoom-label" aria-live="polite">100%</span>
+          <button
+            class="btn icon"
+            id="footer-links-toggle"
+            title="Toggle link visibility"
+            aria-label="Toggle link visibility"
+            aria-pressed="true">
+            <i class="ti ti-eye" aria-hidden="true"></i>
+          </button>
+          <button
+            class="btn icon"
+            id="footer-minimap-toggle"
+            title="Toggle minimap"
+            aria-label="Toggle minimap"
+            aria-pressed="true">
+            <i class="ti ti-map" aria-hidden="true"></i>
+          </button>
+        </div>
+      </footer>
+    </div>
+
+    <!-- Slideout content templates -->
+<template id="tpl-left-nodes">
+  <div class="panel-section">
+    <h4 class="mgT0">Node Palette</h4>
+    <div class="pill-grid">
+      <button class="pill">Math</button>
+      <button class="pill">String</button>
+      <button class="pill">HTTP</button>
+      <button class="pill">Ollama</button>
+    </div>
+    <div class="inline-field mgT10">
+      <label>Search</label>
+      <input type="text" placeholder="Search nodes…"/>
+    </div>
+    <!-- You can render your real node list here -->
+  </div>
+</template>
+
+<template id="tpl-left-workflows">
+  <div class="panel-section">
+    <h4 class="mgT0">Workflows</h4>
+    <ul class="list">
+      <li><button class="link">Chat Playground</button></li>
+      <li><button class="link">Data Import</button></li>
+      <li><button class="link">Image Pipeline</button></li>
+    </ul>
+  </div>
+</template>
+
+<template id="tpl-left-custom">
+  <div class="panel-section">
+    <h4 class="mgT0">Custom</h4>
+    <p class="muted">Add or manage custom nodes.</p>
+    <button class="btn">Open Node Builder</button>
+  </div>
+</template>
+
+<template id="tpl-right-history">
+  <div class="panel-section">
+    <h4 class="mgT0">History</h4>
+    <ul class="list">
+      <li>09:42 — Ran graph “Chat Playground”</li>
+      <li>09:31 — Edited node “Ollama Model”</li>
+      <li>09:28 — Imported project</li>
+    </ul>
+  </div>
+</template>
+
+<template id="tpl-right-queue">
+  <div class="panel-section">
+    <h4 class="mgT0">Queue</h4>
+    <p class="muted">No jobs in queue.</p>
+  </div>
+</template>
+
+    
+    <!-- GridFlow core (order matters) -->
+    <script type="module" src="js/core/store.js"></script>
+    <script type="module" src="js/core/plugins.js"></script>
+    <script type="module" src="js/custom-nodes.js"></script>
+    <script type="module" src="js/core/renderer.js"></script>
+    <script type="module" src="js/add-node-bridge.js"></script>
+
+    <!-- Your nodes + app boot -->
+    <script type="module" src="js/nodes/builtin.js"></script>
+    <script type="module" src="js/nodes/ollama.js"></script>
+    <script type="module" src="js/app.js"></script>
+
+    <!-- ✅ Single bridge script (menus, slideouts, footer toggles) -->
+    <script type="module" src="js/ui-bridge.js"></script>
+  </body>
+</html>

@@ -1,0 +1,163 @@
+/* Bootstrap 4 Helper CSS */
+
+/* Add-on: Bootstrap 4, hidden-{breakpoint}-{up/down} */
+/* taken from Bootstrap 4, alpha 6 */
+.hidden-xs-up {display:none!important;}
+@media (max-width:575px)	{ .hidden-xs-down	{display:none!important;} }
+@media (min-width:576px)	{ .hidden-sm-up		{display:none!important;} }
+@media (max-width:767px)	{ .hidden-sm-down	{display:none!important;} }
+@media (min-width:768px)	{ .hidden-md-up		{display:none!important;} }
+@media (max-width:991px)	{ .hidden-md-down	{display:none!important;} }
+@media (min-width:992px)	{ .hidden-lg-up		{display:none!important;} }
+@media (max-width:1199px)	{ .hidden-lg-down	{display:none!important;} }
+@media (min-width:1200px)	{ .hidden-xl-up		{display:none!important;} }
+.hidden-xl-down {display:none!important;}
+
+
+/* Add-on: Bootstrap 4, hidden-{breakpoint} */
+/* taken from Bootstrap 3.3.6, converted to Bootstrap 4 */
+@media (max-width:575px)	{ .hidden-xs {display:none!important;} }
+@media (min-width:576px) and (max-width:767px)  { .hidden-sm {display:none!important;} }
+@media (min-width:768px) and (max-width:991px)  { .hidden-md {display:none!important;} }
+@media (min-width:992px) and (max-width:1199px) { .hidden-lg {display:none!important;} }
+@media (min-width:1200px)	{ .hidden-xl {display:none!important;} }
+
+
+/* Bootstrap 4 helper: split button icons */
+.btn-group,
+.btn-group .btn-label-icon,
+.btn-group .btn-label-text {display:inline-block;}
+.btn-group .btn-label-icon {margin-left:-16px; margin-right:16px; padding:0 12px; background:rgba(0, 0, 0, .05); font-size:inherit; line-height:inherit;}
+.btn-group .btn-label-text {margin-left:0;}
+
+
+/* Bootstrap 4 fix for not having .w-{size}-100 */
+@media (min-width: 576px)	{ .w-sm-100 {width:100%;} }
+@media (min-width: 768px)	{ .w-md-100 {width:100%;} }
+@media (min-width: 992px)	{ .w-lg-100 {width:100%;} }
+@media (min-width: 1200px)	{ .w-xl-100 {width:100%;} }
+
+/* Bootstrap 4 fix for not having .w-100-{size}-[up/down] */
+.w-100-xs-up {width:100%;}
+@media (max-width:575px)	{ .w-100-xs-down	{width:100%;}	}
+@media (min-width:576px)	{ .w-100-sm-up		{width:100%;}	}
+@media (max-width:767px)	{ .w-100-sm-down	{width:100%;}	}
+@media (min-width:768px)	{ .w-100-md-up		{width:100%;}	}
+@media (max-width:991px)	{ .w-100-md-down	{width:100%;}	}
+@media (min-width:992px)	{ .w-100-lg-up		{width:100%;}	}
+@media (max-width:1199px)	{ .w-100-lg-down	{width:100%;}	}
+@media (min-width:1200px)	{ .w-100-xl-up		{width:100%;}	}
+.w-100-xl-down {width:100%;}
+
+
+/* Bootstrap 4 columns in 5ths */
+.col-xs-5ths,
+.col-sm-5ths,
+.col-md-5ths,
+.col-lg-5ths {position:relative; min-height:1px; padding-right:10px; padding-left:10px;}
+.col-xs-5ths {float:left; width:100%!important;}
+@media (min-width: 768px) {
+	.row.sm-5ths {display:inline-block;}
+	.col-sm-5ths {float:left; width:20%!important;}
+}
+@media (min-width: 992px) {
+	.row.md-5ths {display:inline-block;}
+	.col-md-5ths {float:left; width:20%!important;}
+}
+@media (min-width: 1200px) {
+	.row.lg-5ths {display:inline-block;}
+	.col-lg-5ths {float:left; width:20%!important;}
+}
+
+
+/* Breakpoint Indicator, using Bootstrap 4's grid breakpoints (Not Bootstrap dependant) */
+	html > body:before {
+	content: "Extra small (xs) | (<576px)"; /* Extra Small - xs */
+	position:fixed;
+	bottom:5px;
+	left:5px;
+	z-index:99999999;
+	width:auto;
+	height:auto;
+	padding:5px;
+	color:#fff;
+	font-size:12px;
+	font-family:'Helvetica Neue', Helvetica, Arial, sans-serif;
+	background:rgba(255, 0, 255, 0.50);
+	letter-spacing:1px;
+}
+@media (min-width: 576px) { html > body:before {content: "Small (sm) | (\2265 576px)";} }			/* Small - sm */
+@media (min-width: 768px) { html > body:before {content: "Medium (md) | (\2265 768px)";} }			/* Medium - md */
+@media (min-width: 992px) { html > body:before {content: "Large (lg) | (\2265 992px)";} }			/* Large - lg */
+@media (min-width: 1200px) { html > body:before {content: "Extra Large (xl) | (\2265 1200px)";} }	/* Extra Large - xl */
+
+
+/* Animated Content Loader */
+.form-loading {
+	pointer-events:none;
+	position:relative;
+	cursor:default;
+	-webkit-user-select:none;
+		-ms-user-select:none;
+			user-select:none;
+}
+.form-loading:after,
+.form-loading:before {content:''; display:block; position:absolute;}
+.form-loading:before {z-index:1000; top:0; right:0; bottom:0; left:0; background:rgba(255, 255, 255, .8);}
+.form-loading:after {
+	z-index:1001;
+	top:50%;
+	left:50%;
+	width:32px;
+	height:32px;
+	margin:-16px 0 0 -16px;
+	-webkit-animation:form-spin .6s linear;
+			animation:form-spin .6s linear;
+	-webkit-animation-iteration-count:infinite;
+			animation-iteration-count:infinite;
+	border-width:2px;
+	border-style:solid;
+	border-color:#767676 rgba(0,0,0,.1) rgba(0,0,0,.1);
+	border-radius:999px;
+
+	/* Center to the window */
+	position:fixed;
+	top:50%;
+	left:50%;
+	transform:translate(-50%, -50%);
+}
+.form-loading.form-loading-inverted:before {background:rgba(0,0,0,.45);}
+.form-loading.form-loading-inverted:after {border-color:#fff rgba(255,255,255,.2) rgba(255,255,255,.2);}
+
+@-webkit-keyframes form-spin {
+	from {
+		-webkit-transform:rotate(0);
+		transform:rotate(0);
+	}
+	to {
+		-webkit-transform:rotate(360deg);
+		transform:rotate(360deg);
+	}
+}
+
+@keyframes form-spin{
+	from {
+		-webkit-transform:rotate(0);
+		transform:rotate(0);
+	}
+	to {
+		-webkit-transform:rotate(360deg);
+		transform:rotate(360deg);
+	}
+}
+
+
+/* CSS Outlines for Dev */
+a						{outline:1px dotted #D68A85!important;}
+h1, h2, h3, h4, h5, h6	{outline:1px dotted #E7912D!important;}
+span					{outline:1px dotted #F0F!important;}
+div						{outline:1px dotted #3AB6F1!important;}
+ul, ol					{outline:1px dotted #8684D8!important;}
+li						{outline:1px dotted #DD67AE!important;}
+td, th					{outline:1px dotted lightblue!important;}
+i						{outline:1px dotted gray!important;}
