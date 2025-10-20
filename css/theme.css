@@ -155,7 +155,7 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system
 
 .ctxmenu {
   position: absolute;
-  min-width: 220px;
+  min-width: 180px;
   background: #2f313c;
   border: 1px solid #2a2f3a;
   box-shadow: 0 10px 30px rgba(0,0,0,.45);
@@ -180,8 +180,8 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system
 .ctxsep { height: 1px; background: #222638; margin: 6px 4px; border-radius: 1px; }
 
 .ctxsubmenu {
-  position: absolute; top: 0px; left: 100%;
-  margin-left: 4px; min-width: 220px;
+  position: absolute; top: 0; left: 100%;
+  margin-left: 4px; min-width: 180px;
   background:#2f313c; border: 1px solid #2a2f3a;
   box-shadow: 0 10px 30px rgba(0,0,0,.45);
 }
