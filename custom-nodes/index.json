@@ -1,0 +1,26 @@
+[
+  {
+    "name": "AI Toolkit",
+    "version": "1.0.0",
+    "author": "Antagonist Games",
+    "description": "Demo pack",
+    "icon": "🧠",
+    "path": "ai-toolkit",
+    "nodes": [
+      {
+        "title": "LLM Query",
+        "type": "ai.query",
+        "width": 240,
+        "height": 100,
+        "inputs": [
+          { "id": "execIn", "name": "Execute", "direction": "in", "dataType": "exec" },
+          { "id": "prompt", "name": "Prompt", "direction": "in", "dataType": "string" }
+        ],
+        "outputs": [
+          { "id": "execOut", "name": "Then", "direction": "out", "dataType": "exec" },
+          { "id": "result", "name": "Result", "direction": "out", "dataType": "string" }
+        ]
+      }
+    ]
+  }
+]

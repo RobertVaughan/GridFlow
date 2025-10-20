@@ -1,7 +1,7 @@
 // Nodes slideout population (Basic Nodes)
 import { listNodes } from "../core/plugins.js";
 import { addNode, snap, getGraph } from "../core/store.js";
-import { getWorldCenter } from "../core/renderer.js";
+import { getWorldCenter } from "../core/store.js";
 
 const nodesList = document.getElementById("nodesList");
 

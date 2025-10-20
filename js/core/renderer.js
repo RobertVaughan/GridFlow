@@ -1,12 +1,15 @@
-// GridFlow Renderer: infinite grid (screen space), pan/zoom world, edges, selection, menus,
-// scroll-wheel zoom at cursor, and a live minimap (nodes + viewport rect + drag-to-pan)
+// GridFlow Renderer: infinite grid, pan/zoom world, nodes/edges rendering,
+// wiring, marquee, middle-mouse pan, scroll-zoom at cursor, minimap.
+// Ellipses menu removed. Pin indicator added; pinned nodes cannot be dragged.
+// Colors and shapes applied on the .node container using CSS variables + border-radius.
+
 import {
   getGraph, subscribe, snap, removeWire, transact, removeNode,
   getSelection, setSelection, toggleSelection, clearSelection
 } from "./store.js";
 import { isPortCompatible } from "./plugins.js";
 
-// DOM
+// DOM references
 const stageWrap  = document.getElementById("stageWrap");
 const stageInner = document.getElementById("stageInner");
 const gridCanvas = document.getElementById("gridCanvas");
@@ -19,27 +22,53 @@ const miniHost   = document.getElementById("minimap");
 const miniCanvas = document.getElementById("minimapCanvas");
 const miniCtx    = miniCanvas?.getContext("2d");
 
-// Delete modal
-const modal       = document.getElementById("confirmModal");
-const btnDel      = document.getElementById("confirmDelete");
-const btnCancel   = document.getElementById("confirmCancel");
+// Delete modal (used when other UI asks to confirm removal)
+const modal     = document.getElementById("confirmModal");
+const btnDel    = document.getElementById("confirmDelete");
+const btnCancel = document.getElementById("confirmCancel");
 let pendingDeleteNodeId = null;
 
 // Interaction state
-let dragging  = null;      // {id, el, offsetXw, offsetYw} offsets in WORLD units
-let pendingCommit = null;  // {id, x, y} world coords after drag
-let wiring    = null;      // {from:{nodeId,portId}, kind:"data"|"exec", mouse:{x,y}} screen coords
-let selecting = null;      // {startX,startY,add:boolean} screen coords
-let isPanning = null;      // {startX,startY,vx,vy} middle-mouse pan (screen deltas)
-let miniDrag  = null;      // {dx,dy} dragging the minimap viewport rectangle
+let dragging  = null;      // {id, el, offsetXw, offsetYw}
+let pendingCommit = null;  // {id, x, y}
+let wiring    = null;      // {from:{nodeId,portId}, kind:"data"|"exec", mouse:{x,y}}
+let selecting = null;      // marquee
+let isPanning = null;      // middle-mouse pan
+let miniDrag  = null;      // minimap drag
 
 // Canvases
 const ctxGrid = gridCanvas.getContext("2d");
 const ctxEdge = edgeCanvas.getContext("2d");
 
-// -----------------------------------------------------------------------------
+// Shapes map (order: Soft, Rounded, Square)
+const NODE_SHAPE_RADIUS = {
+  soft: 12,
+  rounded: 6,
+  square: 0
+};
+
+/* ========================================================================== */
+/* Inline editor helpers for generator nodes (util.integer, util.string)      */
+/* ========================================================================== */
+const _editDebounce = new Map(); // key: `${nodeId}:${stateKey}`
+
+function setNodeStateDebounced(nodeId, stateKey, nextValue, label = "Edit value", delay = 180){
+  const k = `${nodeId}:${stateKey}`;
+  const t = _editDebounce.get(k);
+  if (t) clearTimeout(t);
+  _editDebounce.set(k, setTimeout(()=>{
+    transact(g=>{
+      const n = g.nodes.find(nn=>nn.id===nodeId);
+      if(!n) return;
+      n.state ||= {};
+      n.state[stateKey] = nextValue;
+    }, label);
+  }, delay));
+}
+
+// ----------------------------------------------------------------------------
 // Public controls (used by app.js)
-// -----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 let SHOW_EDGES = true;
 export function setShowEdges(v){ SHOW_EDGES = !!v; drawEdges(); drawMinimap(); }
 
@@ -47,7 +76,9 @@ export function setZoom(z){
   const vp = getGraph().viewport;
   vp.zoom = Math.max(0.25, Math.min(3, z));
   applyView();
+  window.dispatchEvent(new CustomEvent("gridflow:zoom-changed", { detail: { zoom: vp.zoom } }));
 }
+
 export function getZoom(){ return getGraph().viewport.zoom || 1; }
 
 export function setMinimapVisible(v){
@@ -55,31 +86,19 @@ export function setMinimapVisible(v){
   drawMinimap();
 }
 
-// Apply world transform (only stageInner is transformed)
+// Apply world transform to inner stage
 function applyView(){
   const vp = getGraph().viewport;
   const tx = vp.x || 0, ty = vp.y || 0, z = vp.zoom || 1;
   stageInner.style.transform = `translate(${tx}px, ${ty}px) scale(${z})`;
-  drawGrid();   // grid is screen-space with phase offset
-  drawEdges();  // edges are screen-space
+  drawGrid();
+  drawEdges();
   drawMinimap();
 }
 
-// Returns the world-space center (cx, cy) of the current viewport
-export function getWorldCenter(){
-  const vp = getGraph().viewport || { x:0, y:0, zoom:1 };
-  const z  = vp.zoom || 1;
-  const screenW = document.getElementById("stageWrap").clientWidth;
-  const screenH = document.getElementById("stageWrap").clientHeight;
-  // visible world rect: x = -vp.x/z, y = -vp.y/z, w = screenW/z, h = screenH/z
-  const cx = (- (vp.x || 0) + screenW * 0.5) / z;
-  const cy = (- (vp.y || 0) + screenH * 0.5) / z;
-  return { cx, cy };
-}
-
-// -----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 // Utilities
-// -----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
 
 function screenToWorld(sx, sy){
@@ -102,18 +121,17 @@ function worldToScreen(wx, wy){
   };
 }
 
-// -----------------------------------------------------------------------------
-// Sizing / resize
-// -----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// Resize canvases
+// ----------------------------------------------------------------------------
 function resizeCanvas(){
-  const rect = stageWrap.getBoundingClientRect(); // screen-space
+  const rect = stageWrap.getBoundingClientRect();
   for(const c of [gridCanvas, edgeCanvas]){
     c.width  = Math.max(1, Math.floor(rect.width  * devicePixelRatio));
     c.height = Math.max(1, Math.floor(rect.height * devicePixelRatio));
     c.style.width  = rect.width + "px";
     c.style.height = rect.height + "px";
   }
-  // minimap canvas (CSS controls rendered size; we set backing store)
   if(miniCanvas){
     const mw = miniHost.clientWidth, mh = miniHost.clientHeight;
     miniCanvas.width  = Math.max(1, Math.floor(mw * devicePixelRatio));
@@ -125,9 +143,9 @@ function resizeCanvas(){
 }
 window.addEventListener("resize", resizeCanvas);
 
-// -----------------------------------------------------------------------------
-// Infinite screen-space grid (phase offset tracks world translation)
-// -----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// Grid (screen-space with phase following world translate)
+// ----------------------------------------------------------------------------
 function drawGrid(){
   const g = getGraph();
   const { gridSize } = g.settings;
@@ -141,7 +159,8 @@ function drawGrid(){
   ctx.clearRect(0,0,w,h);
   ctx.save();
   ctx.scale(devicePixelRatio, devicePixelRatio);
-  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue("--grid");
+  const css = getComputedStyle(document.body);
+  ctx.fillStyle = css.getPropertyValue("--grid");
   ctx.beginPath();
   for(let x = -ox; x < gridCanvas.clientWidth;  x += gridSize) ctx.rect(x, 0, 1, gridCanvas.clientHeight);
   for(let y = -oy; y < gridCanvas.clientHeight; y += gridSize) ctx.rect(0, y, gridCanvas.clientWidth, 1);
@@ -149,9 +168,9 @@ function drawGrid(){
   ctx.restore();
 }
 
-// -----------------------------------------------------------------------------
-// Edges (screen-space canvas, sampling DOM pin positions)
-// -----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// Edges (screen-space canvas)
+// ----------------------------------------------------------------------------
 function cablePath(ax, ay, bx, by){
   const dx = Math.max(40, Math.abs(bx-ax)*0.5);
   return new Path2D(`M ${ax} ${ay} C ${ax+dx} ${ay}, ${bx-dx} ${by}, ${bx} ${by}`);
@@ -205,9 +224,9 @@ function drawEdges(){
   ctx.restore();
 }
 
-// -----------------------------------------------------------------------------
-// Minimap: draws nodes + viewport rect; click/drag to pan
-// -----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// Minimap
+// ----------------------------------------------------------------------------
 function getWorldBounds(){
   const g = getGraph();
   if(!g.nodes.length) return { minX:0, minY:0, maxX:1, maxY:1 };
@@ -217,111 +236,85 @@ function getWorldBounds(){
     minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
     maxX = Math.max(maxX, n.x + w); maxY = Math.max(maxY, n.y + h);
   }
-  // add padding
   const pad = 100;
   return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
 }
 
+let minimapMapping = null;
+
 function drawMinimap(){
   if(!miniCanvas || miniHost?.style.display === "none") return;
 
-  const g   = getGraph();
-  const vp  = g.viewport || { x:0, y:0, zoom:1 };
-  const z   = vp.zoom || 1;
-
+  const g = getGraph();
   const ctx = miniCtx;
   const css = getComputedStyle(document.body);
   const W = miniHost.clientWidth, H = miniHost.clientHeight;
 
-  // DPR backing store is set in resizeCanvas()
-  ctx.clearRect(0,0, miniCanvas.width, miniCanvas.height);
+  ctx.clearRect(0,0,miniCanvas.width,miniCanvas.height);
   ctx.save();
   ctx.scale(devicePixelRatio, devicePixelRatio);
 
-  // ---- background
   const cssBg   = css.getPropertyValue("--muted-2") || "#0b0d13";
   const cssNode = css.getPropertyValue("--muted")    || "#171a22";
-  const cssEdge = css.getPropertyValue("--grid")     || "#2a2f3a";
+  const cssBorder = css.getPropertyValue("--accent") || "#7dd3fc";
   const cssVp   = css.getPropertyValue("--accent-2") || "#22d3ee";
-  const cssBd   = css.getPropertyValue("--accent")   || "#7dd3fc";
+
   ctx.fillStyle = cssBg.trim(); ctx.fillRect(0,0,W,H);
 
-  // ---- compute world bounds for fitting whole scene into the minimap
-  const bb = getWorldBounds();                 // {minX,minY,maxX,maxY} with padding
+  const bb = getWorldBounds();
   const worldW = Math.max(1, bb.maxX - bb.minX);
   const worldH = Math.max(1, bb.maxY - bb.minY);
   const pad = 6;
-  const fitW = Math.max(1, W - pad*2);
-  const fitH = Math.max(1, H - pad*2);
-  const baseScale = Math.min(fitW/worldW, fitH/worldH);
-  const offX = pad - bb.minX * baseScale;
-  const offY = pad - bb.minY * baseScale;
+  const baseScale = Math.min((W-2*pad)/worldW, (H-2*pad)/worldH);
+  const offX = pad - bb.minX*baseScale;
+  const offY = pad - bb.minY*baseScale;
 
-  // ---- main viewport in WORLD coords
+  // Mirror main zoom about current world center so node footprints scale with zoom.
+  const vp = g.viewport || {x:0,y:0,zoom:1};
+  const z  = vp.zoom || 1;
   const screenW = stageWrap.clientWidth;
   const screenH = stageWrap.clientHeight;
   const viewW   = screenW / z;
   const viewH   = screenH / z;
   const viewX   = -(vp.x || 0) / z;
   const viewY   = -(vp.y || 0) / z;
-
-  // We mirror the main zoom: scale nodes around the **world center** of the current view.
-  const cx = viewX + viewW * 0.5;   // world center-of-view
+  const cx = viewX + viewW * 0.5;
   const cy = viewY + viewH * 0.5;
 
-  // helper: world → minimap (with zoom-about-center)
-  // positions & sizes are scaled by z about (cx,cy), then fit with baseScale
   function wxToMx(x){ return ((cx + (x - cx) * z) * baseScale) + offX; }
   function wyToMy(y){ return ((cy + (y - cy) * z) * baseScale) + offY; }
   const sizeScale = z * baseScale;
 
-  // ---- draw nodes (now truly zooming)
-  const minW = 3, minH = 2;    // minimum visibility in pixels (on minimap)
+  // Nodes
   ctx.fillStyle   = cssNode.trim();
-  ctx.strokeStyle = cssBd.trim(); 
+  ctx.strokeStyle = cssBorder.trim();
   ctx.lineWidth   = 1;
+  const minW = 3, minH = 2;
 
   for(const n of g.nodes){
-    const nx = wxToMx(n.x);
-    const ny = wyToMy(n.y);
+    const nx = wxToMx(n.x), ny = wyToMy(n.y);
     const nw = Math.max(minW, (n.width  || 220) * sizeScale);
     const nh = Math.max(minH, (n.height || 86)  * sizeScale);
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(nx, ny, nw, nh, 2);
     else ctx.rect(nx, ny, nw, nh);
     ctx.fill();
-    ctx.globalAlpha = 0.8;
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = 0.8; ctx.stroke(); ctx.globalAlpha = 1;
   }
 
-  // optional subtle grid
-  ctx.globalAlpha = 0.15;
-  ctx.strokeStyle = cssEdge.trim();
-  const step = 24;
-  for(let x=0;x<W;x+=step){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
-  for(let y=0;y<H;y+=step){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
-  ctx.globalAlpha = 1;
-
-  // ---- viewport rectangle (unchanged math; reflects visible world rect)
+  // viewport rectangle
   const mx = viewX * baseScale + offX;
   const my = viewY * baseScale + offY;
   const mw = viewW * baseScale;
   const mh = viewH * baseScale;
-  ctx.setLineDash([4,3]);
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = cssVp.trim();
+  ctx.setLineDash([4,3]); ctx.lineWidth = 2; ctx.strokeStyle = cssVp.trim();
   ctx.strokeRect(mx, my, mw, mh);
   ctx.setLineDash([]);
 
   ctx.restore();
-
-  // keep mapping for click/drag pan (same mapping, based on baseScale fit)
   minimapMapping = { bb, scale: baseScale, offX, offY, pad };
 }
 
-// Convert a minimap position to world coords (top-left of viewport)
-let minimapMapping = null;
 function miniToWorld(mx, my){
   if(!minimapMapping) return { x:0, y:0 };
   const { bb, scale, offX, offY } = minimapMapping;
@@ -330,7 +323,6 @@ function miniToWorld(mx, my){
   return { x: wx, y: wy };
 }
 
-// Center viewport at a world point (world center)
 function centerViewAtWorld(wx, wy){
   const vp = getGraph().viewport;
   const z  = vp.zoom || 1;
@@ -341,7 +333,6 @@ function centerViewAtWorld(wx, wy){
   applyView();
 }
 
-// Minimap interactions
 if(miniHost && miniCanvas){
   miniCanvas.addEventListener("pointerdown", (e)=>{
     const r = miniCanvas.getBoundingClientRect();
@@ -357,12 +348,10 @@ if(miniHost && miniCanvas){
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     const a = miniToWorld(miniDrag.startX, miniDrag.startY);
     const b = miniToWorld(mx, my);
-    // delta in world space -> move viewport center opposite drag
     const vp = getGraph().viewport;
     const z  = vp.zoom || 1;
     const screenW = stageWrap.clientWidth;
     const screenH = stageWrap.clientHeight;
-    // current center
     const cx = (screenW/2 - (vp.x||0)) / z;
     const cy = (screenH/2 - (vp.y||0)) / z;
     const ncx = cx + (a.x - b.x);
@@ -374,98 +363,181 @@ if(miniHost && miniCanvas){
   miniCanvas.addEventListener("pointercancel", ()=>{ miniDrag = null; });
 }
 
-// -----------------------------------------------------------------------------
-// Nodes (in world coordinates)
-// -----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// Nodes (render + interactions)
+// ----------------------------------------------------------------------------
+function computeNodeStyles(n){
+  // Determine CSS var reference for color; support "orange" with fallback to theme typo "--node-orage"
+  const key = (n.ui?.color || "").toLowerCase().trim();
+  // Construct a safe CSS var() reference or empty string to let theme default show.
+  let cssVarRef = "";
+  if (key) {
+    if (key === "orange") {
+      // Fallback to --node-orange if present, else fallback to --node-orage (as in the provided CSS)
+      cssVarRef = "var(--node-orange, var(--node-orage))";
+    } else {
+      cssVarRef = `var(--node-${key})`;
+    }
+  }
+  const shapeKey = (n.ui?.shape || "").toLowerCase();
+  const radiusPx = (shapeKey in NODE_SHAPE_RADIUS) ? NODE_SHAPE_RADIUS[shapeKey] : NODE_SHAPE_RADIUS.rounded;
+  return { cssVarRef, radiusPx };
+}
+
 function renderNodes(){
   const g = getGraph();
   const selected = getSelection();
   nodeLayer.innerHTML = "";
 
   for(const n of g.nodes){
+    const pinned = !!n.state?.pinned;
     const el = document.createElement("div");
     el.className = "node";
     if(selected.has(n.id)) el.classList.add("selected");
+    if(pinned) el.classList.add("pinned");
     el.dataset.node = n.id;
     el.tabIndex = 0;
+
+    // Geometry
     el.style.left = n.x + "px";
     el.style.top  = n.y + "px";
     el.style.width = (n.width||220) + "px";
     if(n.height) el.style.height = n.height + "px";
 
+    // Visual styling via container styles:
+    const styles = computeNodeStyles(n);
+    if (styles.cssVarRef) el.style.backgroundColor = styles.cssVarRef;
+    el.style.borderRadius = styles.radiusPx + "px";
+
+    // Build content
     const execIn  = n.inputs.filter(p=>p.dataType==="exec");
     const dataIns = n.inputs.filter(p=>p.dataType!=="exec");
     const execOut = n.outputs.filter(p=>p.dataType==="exec");
     const dataOut = n.outputs.filter(p=>p.dataType!=="exec");
 
     el.innerHTML = `
-      <div class="title" draggable="false" style="cursor:grab;">
+      <div class="title" draggable="false" style="cursor:${pinned?"not-allowed":"grab"}; background:#1115;
+              border-top-left-radius:${styles.radiusPx}px;
+              border-top-right-radius:${styles.radiusPx}px;">
         <span class="title-text">${n.title}</span>
-        <button class="menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" title="Node menu">&#8942;</button>
-        <div class="dropdown" role="menu" aria-label="Node menu">
-          <button role="menuitem" data-action="props">Properties</button>
-          <div class="divider"></div>
-          <button class="danger" role="menuitem" data-action="delete"><span class="icon-trash" aria-hidden="true"></span>Delete</button>
-        </div>
+        ${pinned ? `<span class="pin-indicator" title="Pinned" aria-label="Pinned" style="color:#ef4444; font-size:14px; margin-left:auto;">📍</span>` : `<span class="pin-indicator" style="display:none"></span>`}
       </div>
       <div class="body">
         <div class="exec-row">
-          ${execIn.length ? `<div class="port exec exec-pin in" data-kind="exec" data-dir="in" data-id="${execIn[0].id}" aria-label="Exec In"><span class="dot" aria-hidden="true"></span><span>&laquo;&laquo;</span></div>` : `<div></div>`}
-          ${execOut.length ? `<div class="port exec exec-pin out" data-kind="exec" data-dir="out" data-id="${execOut[0].id}" aria-label="Exec Out"><span>&raquo;&raquo;</span><span class="dot" aria-hidden="true"></span></div>` : `<div></div>`}
+          ${execIn.length ? `<div class="port exec exec-pin in" data-kind="exec" data-dir="in" data-id="${execIn[0].id}" aria-label="Exec In"><span class="dot"></span><span>&laquo;&laquo;</span></div>` : `<div></div>`}
+          ${execOut.length ? `<div class="port exec exec-pin out" data-kind="exec" data-dir="out" data-id="${execOut[0].id}" aria-label="Exec Out"><span>&raquo;&raquo;</span><span class="dot"></span></div>` : `<div></div>`}
         </div>
-        <div class="ports in" aria-label="Inputs">
-          ${dataIns.map(p => `<div class="port" data-kind="data" data-dir="in" data-id="${p.id}" aria-label="Input ${p.name} (${p.dataType})"><span class="dot" aria-hidden="true"></span><span>${p.name}</span></div>`).join("")}
-        </div>
-        <div class="ports out" aria-label="Outputs">
-          ${dataOut.map(p => `<div class="port" data-kind="data" data-dir="out" data-id="${p.id}" aria-label="Output ${p.name} (${p.dataType})"><span class="dot" aria-hidden="true"></span><span>${p.name}</span></div>`).join("")}
+
+        <!-- Inline editor row will be injected here for util.integer / util.string -->
+
+        <div class="io-cols" style="display:flex;justify-content:space-between;gap:10px;">
+          <div class="ports in" style="flex:1;">
+            ${dataIns.map(p => {
+              return `<div class="port" data-kind="data" data-dir="in" data-id="${p.id}">
+                        <span class="dot"></span><span>${p.name}</span>
+                      </div>`;
+            }).join("")}
+          </div>
+          <div class="ports out" style="flex:1;text-align:right;">
+            ${dataOut.map(p => `<div class="port" data-kind="data" data-dir="out" data-id="${p.id}">
+                                  <span>${p.name}</span><span class="dot"></span>
+                                </div>`).join("")}
+          </div>
         </div>
       </div>`;
 
-    // Selection
+    /* -------- Inline editor injection for generator nodes (util.integer, util.string) -------- */
+    (function attachInlineEditor(){
+      const bodyEl = el.querySelector(".body");
+      if(!bodyEl) return;
+
+      // Detect supported generator types
+      let editorSpec = null;
+      if(n.type === "util.integer"){
+        const curr = Number.isFinite(Number(n.state?.value)) ? (Number(n.state.value)|0) : 0;
+        editorSpec = {
+          label: "Value",
+          stateKey: "value",
+          inputType: "number",
+          value: String(curr),
+          step: "1",
+          parse: (v)=> {
+            const num = Number(v);
+            return Number.isFinite(num) ? (num|0) : 0;
+          },
+          commitLabel: "Edit Integer"
+        };
+      }else if(n.type === "util.string"){
+        const curr = String(n.state?.text ?? "");
+        editorSpec = {
+          label: "Text",
+          stateKey: "text",
+          inputType: "text",
+          value: curr,
+          step: null,
+          parse: (v)=> String(v ?? ""),
+          commitLabel: "Edit String"
+        };
+      }
+
+      if(!editorSpec) return;
+
+      // Create editor row container after exec row, before io-cols
+      const execRow = bodyEl.querySelector(".exec-row");
+      const row = document.createElement("div");
+      row.className = "inline-editor-row";
+      row.style.cssText = "display:flex;align-items:center;gap:8px;margin:6px 0 8px;";
+
+      row.innerHTML = `
+        <input
+          class="inline-editor"
+          type="${editorSpec.inputType}"
+          ${editorSpec.step ? `step="${editorSpec.step}"` : ""}
+          value="${editorSpec.value.replace(/"/g, '&quot;')}"
+          style="flex:1;background:#111a;border:1px solid #333;color:var(--fg);
+                 border-radius:6px;padding:4px 6px;min-height:26px;"
+          aria-label="${editorSpec.label}"
+        />
+        <div class="port" data-kind="data" data-dir="out" data-id="${n.outputs?.[0]?.id || 'value'}"
+             style="margin-left:6px;display:flex;align-items:center;">
+          <span class="dot" aria-hidden="true"></span>
+        </div>
+      `;
+
+      if(execRow){
+        execRow.insertAdjacentElement("afterend", row);
+      }else{
+        bodyEl.prepend(row);
+      }
+
+      const inp = row.querySelector("input.inline-editor");
+      const commit = ()=>{
+        const parsed = editorSpec.parse(inp.value);
+        setNodeStateDebounced(n.id, editorSpec.stateKey, parsed, editorSpec.commitLabel);
+      };
+      inp.addEventListener("input", commit);
+      inp.addEventListener("change", commit);
+      inp.addEventListener("blur", commit);
+    })();
+    /* ----------------------------------------------------------------------------------------- */
+
+    // Selection click
     el.addEventListener("pointerdown", e => {
       if(e.button !== 0) return;
-      if(e.target.closest(".menu-btn") || e.target.closest(".dropdown")) return;
       if(e.shiftKey) toggleSelection(n.id); else setSelection([n.id]);
     });
 
-    // Menu
+    // Dragging (blocked if pinned)
     const title = el.querySelector(".title");
-    const menuButton = title.querySelector(".menu-btn");
-    const dropdown = title.querySelector(".dropdown");
-    function closeDropdown(){
-      dropdown.classList.remove("open");
-      menuButton.setAttribute("aria-expanded","false");
-    }
-    menuButton.addEventListener("click", (e)=>{
-      e.stopPropagation();
-      const open = !dropdown.classList.contains("open");
-      document.querySelectorAll(".node .dropdown.open").forEach(d=>{
-        d.classList.remove("open"); d.parentElement.querySelector(".menu-btn")?.setAttribute("aria-expanded","false");
-      });
-      if(open){ dropdown.classList.add("open"); menuButton.setAttribute("aria-expanded","true"); }
-    });
-    dropdown.addEventListener("click", (e)=>{
-      const t = e.target.closest("[data-action]"); if(!t) return;
-      e.preventDefault();
-      const action = t.getAttribute("data-action");
-      if(action==="delete"){ pendingDeleteNodeId = n.id; openModal(); }
-      if(action==="props"){ window.dispatchEvent(new CustomEvent("gridflow:open-properties",{ detail:{ nodeId:n.id } })); }
-      closeDropdown();
-    });
-    document.addEventListener("click", (ev)=>{
-      if(!el.contains(ev.target)){ closeDropdown(); }
-    }, { once:true });
-
-    // Dragging (screen → world)
     title.addEventListener("pointerdown", e => {
       if(e.button !== 0) return;
-      if(e.target.closest(".menu-btn")) return;
+      if(pinned) return;
       e.preventDefault();
       try { title.setPointerCapture(e.pointerId); } catch {}
       const z = getZoom();
-      const wrapRect = nodeLayer.getBoundingClientRect(); // screen
+      const wrapRect = nodeLayer.getBoundingClientRect();
       const pxw = (e.clientX - wrapRect.left) / z;
-      const pyw = (e.clientY - wrapRect.top)  / z;
+      const pyw = (e.clientY - wrapRect.top ) / z;
       const offsetXw = pxw - n.x;
       const offsetYw = pyw - n.y;
       dragging = { id: n.id, el, offsetXw, offsetYw };
@@ -476,7 +548,8 @@ function renderNodes(){
       try { title.releasePointerCapture?.(e.pointerId); } catch {}
       if(dragging && dragging.id === n.id){
         finalizeDragCommit(); dragging = null;
-        title.style.cursor = "grab"; document.body.style.userSelect = "";
+        title.style.cursor = pinned ? "not-allowed" : "grab";
+        document.body.style.userSelect = "";
       }
     });
 
@@ -527,13 +600,13 @@ function finalizeDragCommit(){
   drawEdges();
 }
 
-// -----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 // Master draw
-// -----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 export function drawAll(){ drawGrid(); renderNodes(); drawEdges(); drawMinimap(); }
 resizeCanvas();
 subscribe(()=>{ drawAll(); applyView(); });
-applyView(); // initial
+applyView();
 
 // Keep selection highlight in sync
 window.addEventListener("gridflow:selection-changed", () => {
@@ -543,13 +616,13 @@ window.addEventListener("gridflow:selection-changed", () => {
   });
 });
 
-// -----------------------------------------------------------------------------
-// Global pointer handling (drag, ghost wire, marquee, middle-mouse pan)
-// -----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// Global pointer handling (drag/move/wire/marquee/pan)
+// ----------------------------------------------------------------------------
 window.addEventListener("pointermove", e => {
   const z = getZoom();
 
-  // Dragging nodes
+  // Dragging node
   if(dragging){
     const wrapRect = nodeLayer.getBoundingClientRect();
     let nx = (e.clientX - wrapRect.left)/z - dragging.offsetXw;
@@ -581,7 +654,7 @@ window.addEventListener("pointermove", e => {
     return;
   }
 
-  // Middle-mouse panning
+  // Mid-mouse pan
   if(isPanning){
     const dx = e.clientX - isPanning.startX;
     const dy = e.clientY - isPanning.startY;
@@ -627,14 +700,14 @@ nodeLayer.addEventListener("pointerdown", e => {
   const r = marquee.style; r.display="block"; r.left=e.clientX+"px"; r.top=e.clientY+"px"; r.width="0px"; r.height="0px";
 });
 
-// Clear selection on outside click
+// Clear selection on outside click (but let context menu handle its own)
 document.addEventListener("pointerdown", e=>{
-  if(!e.target.closest(".node") && !e.target.closest(".dropdown") && !e.target.closest(".menu-btn") && !selecting){
+  if(!e.target.closest(".node") && !e.target.closest(".ctxmenu") && !e.target.closest(".ctxsubmenu") && !selecting){
     clearSelection();
   }
 });
 
-// Context menu on edges: remove last wire (quick)
+// Context menu on edges: quick remove last wire
 edgeCanvas.addEventListener("contextmenu", e => {
   e.preventDefault();
   const g = getGraph();
@@ -644,7 +717,7 @@ edgeCanvas.addEventListener("contextmenu", e => {
 // Middle-mouse panning on stage
 stageWrap.addEventListener("pointerdown", (e)=>{
   if(e.button !== 1) return;
-  if(e.target.closest(".node") || e.target.closest(".dropdown") || e.target.closest(".menu-btn")) return;
+  if(e.target.closest(".node")) return;
   e.preventDefault();
   const vp = getGraph().viewport;
   isPanning = { startX: e.clientX, startY: e.clientY, vx: vp.x || 0, vy: vp.y || 0 };
@@ -660,39 +733,34 @@ function endPan(e){
   document.body.style.userSelect = "";
 }
 
-// -----------------------------------------------------------------------------
 // Scroll-wheel zoom at cursor (pan compensation)
-// -----------------------------------------------------------------------------
 stageWrap.addEventListener("wheel", (e)=>{
-  // ctrlKey zooming is OS-level; let it pass. We use regular wheel to zoom.
-  if(e.ctrlKey) return;
+  if(e.ctrlKey) return; // let OS zoom be
   e.preventDefault();
 
   const vp = getGraph().viewport;
   const oldZ = vp.zoom || 1;
   const mouseWorldBefore = screenToWorld(e.clientX, e.clientY);
 
-  // zoom factor; tune the 0.001 for sensitivity
   const factor = Math.exp(-e.deltaY * 0.001);
   const newZ = clamp(oldZ * factor, 0.25, 3);
 
-  // keep world point under cursor stationary in screen coords
   vp.zoom = newZ;
   const rect = stageWrap.getBoundingClientRect();
   vp.x = e.clientX - rect.left - mouseWorldBefore.x * newZ;
   vp.y = e.clientY - rect.top  - mouseWorldBefore.y * newZ;
 
   applyView();
+  window.dispatchEvent(new CustomEvent("gridflow:zoom-changed", { detail: { zoom: vp.zoom } }));
 }, { passive:false });
 
-// -----------------------------------------------------------------------------
-// Delete confirmation modal
-// -----------------------------------------------------------------------------
-function openModal(){ modal.classList.remove("hidden"); btnCancel.focus(); }
-function closeModal(){ modal.classList.add("hidden"); pendingDeleteNodeId = null; }
-btnCancel.addEventListener("click", (e)=>{ e.preventDefault(); closeModal(); });
-modal.querySelector(".modal-backdrop").addEventListener("click", closeModal);
-btnDel.addEventListener("click", (e)=>{ e.preventDefault(); if(pendingDeleteNodeId){ removeNode(pendingDeleteNodeId); } closeModal(); });
+// ----------------------------------------------------------------------------
+// Delete confirmation modal hooks (if used by other UI)
+// ----------------------------------------------------------------------------
+function openModal(){ modal?.classList.remove("hidden"); btnCancel?.focus(); }
+function closeModal(){ modal?.classList.add("hidden"); pendingDeleteNodeId = null; }
+btnCancel?.addEventListener("click", (e)=>{ e.preventDefault(); closeModal(); });
+modal?.querySelector(".modal-backdrop")?.addEventListener("click", closeModal);
+btnDel?.addEventListener("click", (e)=>{ e.preventDefault(); if(pendingDeleteNodeId){ removeNode(pendingDeleteNodeId); } closeModal(); });
 
-// Initial paint
-// (resizeCanvas already called at module load via event, but ensure once)
+// Initial paint is triggered by resize + subscribe + applyView

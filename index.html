@@ -168,12 +168,20 @@
     <div class="bar-center">
       <span class="muted">Graph Floor</span>
       <div class="sep"></div>
-      <button id="zoomOut" class="btn">−</button>
-      <span id="zoomPct" class="mono">100%</span>
-      <button id="zoomIn" class="btn">+</button>
+
+      <button id="btnFit" class="btn" title="Fit to Screen">[ ]</button>
+      <button id="btnResetZoom" class="btn" title="Reset Zoom">🔄</button>
+
       <div class="sep"></div>
-      <label class="toggle"><input id="toggleLinks" type="checkbox" checked> Links</label>
-      <label class="toggle"><input id="toggleMinimap" type="checkbox" checked> Minimap</label>
+
+      <button id="zoomOut" class="btn" title="Zoom Out">−</button>
+      <span id="zoomPct" class="mono">100%</span>
+      <button id="zoomIn" class="btn" title="Zoom In">+</button>
+
+      <div class="sep"></div>
+
+      <button id="btnToggleLinks" class="btn" title="Toggle Wires">🔗</button>
+      <button id="btnToggleMinimap" class="btn" title="Toggle Minimap">🗺️</button>
     </div>
     <div class="bar-right">
       <span id="appVersion">v1.2.0</span>
