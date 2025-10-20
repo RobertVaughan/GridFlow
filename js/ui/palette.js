@@ -1,42 +1,51 @@
-// Palette + search (Cmd+/) to add nodes at cursor
+// Nodes slideout population (Basic Nodes)
 import { listNodes } from "../core/plugins.js";
-import { addNode, getGraph, snap } from "../core/store.js";
+import { addNode, snap, getGraph } from "../core/store.js";
+import { getWorldCenter } from "../core/renderer.js";
 
-const listEl = document.getElementById("paletteList");
-const search = document.getElementById("search");
+const nodesList = document.getElementById("nodesList");
 
-function render(){
-  const items = listNodes().sort((a,b)=> a.title.localeCompare(b.title));
-  listEl.innerHTML = items.map(d => `<button class="btn btn-node" data-type="${d.type}" title="${d.type}">${d.title}</button>`).join("");
-  listEl.querySelectorAll("button").forEach(b => {
-    b.addEventListener("click", () => spawnNode(b.dataset.type));
-  });
-}
-function spawnNode(type){
-  const def = listNodes().find(d=>d.type===type);
-  const g = getGraph();
-  const x = snap(80 + Math.random()*400, g.settings.gridSize);
-  const y = snap(80 + Math.random()*400, g.settings.gridSize);
+function spawn(def){
+  const { cx, cy } = getWorldCenter();
+  const grid  = getGraph().settings.gridSize || 20;
+  const snapOn = !!getGraph().settings.snapToGrid;
+
+  // default size hint (used only for initial centering)
+  const w = Math.max(180, def.width || 220);
+  const h = Math.max(70,  def.height || 86);
+
+  // jitter so multiple spawns don’t perfectly overlap
+  const jitter = 24;
+  let x = cx - w / 2 + (Math.random() * jitter - jitter/2);
+  let y = cy - h / 2 + (Math.random() * jitter - jitter/2);
+  if (snapOn) { x = snap(x, grid); y = snap(y, grid); }
+
   const n = {
     id: crypto.randomUUID(),
     type: def.type,
     title: def.title,
-    x, y,
-    inputs: def.inputs?.map(p=>({...p})) || [],
-    outputs: def.outputs?.map(p=>({...p})) || [],
-    state: def.initialState || {},
-    ui: { inspector: def.inspector || [] }
+    x, y, width: def.width || 220, height: def.height || undefined,
+    inputs: (def.inputs||[]).map(p=>({ ...p })),
+    outputs:(def.outputs||[]).map(p=>({ ...p })),
+    state: {},
+    ui: def.ui || { inspector: def.inspector || [] }
   };
   addNode(n);
 }
-render();
-window.addEventListener("gridflow:node-registered", render);
-search.addEventListener("keydown", e => {
-  if(e.key === "Enter" && search.value){
-    const hit = listNodes().find(d => d.title.toLowerCase().includes(search.value.toLowerCase()) || d.type.includes(search.value));
-    if(hit){ spawnNode(hit.type); search.value=""; }
+
+function render(){
+  if(!nodesList) return;
+  nodesList.innerHTML = "";
+  const defs = listNodes().sort((a,b)=>a.title.localeCompare(b.title));
+  for(const def of defs){
+    const row = document.createElement("button");
+    row.className = "btn";
+    row.textContent = def.title;
+    row.title = def.type;
+    row.addEventListener("click", ()=> spawn(def));
+    nodesList.appendChild(row);
   }
-});
-document.addEventListener("keydown", e => {
-  if(e.key === "/" && document.activeElement.tagName !== "INPUT"){ e.preventDefault(); search.focus(); }
-});
+}
+
+window.addEventListener("gridflow:node-registered", render);
+document.addEventListener("DOMContentLoaded", render);

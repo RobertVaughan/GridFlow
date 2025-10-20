@@ -1,436 +1,223 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
-  <head>
-    <meta charset="utf-8" />
-    <title>GridFlow</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-    <!-- ✅ Single merged stylesheet (NodeSmith + GridFlow + bridge tweaks) -->
-    <link rel="stylesheet" href="css/styles.css" />
-    <link rel="stylesheet" href="css/paradox.css" />
-
-    <!-- Tabler Icons (optional; shows footer/toolbar icons) -->
-    <!-- in <head> -->
-    <link rel="preconnect" href="https://unpkg.com" crossorigin />
-    <link href="https://unpkg.com/@tabler/icons-webfont@2.47.0/tabler-icons.min.css" rel="stylesheet" />
-  </head>
-  <body>
-    <div class="app">
-      <!-- Header -->
-      <header class="hero">
-        <div id="header-left">
-          <span class="dot" aria-hidden="true"></span>
-          <strong>GridFlow</strong>
-
-          <!-- File menu -->
-          <div class="menu mgL10">
-            <button class="btn" id="menu-file-btn" aria-haspopup="true" aria-expanded="false">File ▾</button>
-            <div class="menu-panel" id="menu-file" hidden>
-              <button class="menu-item" id="btnNew">New Project</button>
-              <button class="menu-item" id="btnOpen">Open…</button>
-              <button class="menu-item" id="btnSave">Save</button>
-              <hr />
-              <button class="menu-item" id="btnExport">Export JSON</button>
-              <button class="menu-item" id="btnImport">Import JSON</button>
-            </div>
-          </div>
-          <!-- Edit menu -->
-          <div class="menu">
-            <button class="btn" id="menu-edit-btn" aria-haspopup="true" aria-expanded="false">Edit ▾</button>
-            <div class="menu-panel" id="menu-edit" hidden>
-              <button class="menu-item" id="btnUndo">Undo</button>
-              <button class="menu-item" id="btnRedo">Redo</button>
-              <hr />
-              <button class="menu-item" id="btnSelectAll">Select All</button>
-              <button class="menu-item" id="btnDelete">Delete</button>
-            </div>
-          </div>
-
-          <!-- View menu -->
-          <div class="menu">
-            <button class="btn" id="menu-view-btn" aria-haspopup="true" aria-expanded="false">View ▾</button>
-            <div class="menu-panel" id="menu-view" hidden>
-              <button class="menu-item" id="btnCenter">Center on First Node</button>
-              <button class="menu-item" id="btnFit">Fit to View</button>
-            </div>
-          </div>
-          <div id="header-right" class="toolbar"></div>
-        </div>
-      </header>
-
-      <!-- Left rail -->
-      <nav class="rail rail-left" aria-label="Left tools">
-        <button class="rail-btn" data-open="left:nodes" title="Nodes" aria-label="Nodes">
-          <i class="ti ti-box" aria-hidden="true"></i><span>Nodes</span>
-        </button>
-        <button class="rail-btn" data-open="left:workflows" title="Workflows" aria-label="Workflows">
-          <i class="ti ti-git-branch" aria-hidden="true"></i><span>Workflows</span>
-        </button>
-        <button class="rail-btn" data-open="left:custom" title="Custom" aria-label="Custom">
-          <i class="ti ti-star" aria-hidden="true"></i><span>Custom</span>
-        </button>
-        <div class="rail-spacer"></div>
-        <button class="rail-btn" id="open-settings" data-open="left:settings" title="Settings" aria-label="Settings">
-          <i class="ti ti-settings" aria-hidden="true"></i><span>Settings</span>
-        </button>
-      </nav>
-
-      <!-- Right rail -->
-      <nav class="rail rail-right" aria-label="Right tools">
-        <button class="rail-btn" data-open="right:history" title="History" aria-label="History">
-          <i class="ti ti-clock" aria-hidden="true"></i><span>History</span>
-        </button>
-        <button class="rail-btn" data-open="right:queue" title="Queue" aria-label="Queue">
-          <i class="ti ti-list-details" aria-hidden="true"></i><span>Queue</span>
-        </button>
-      </nav>
-
-      <!-- Slideouts -->
-      <aside id="panel-left" class="slideout slideout-left" aria-hidden="true" hidden>
-        <header class="slideout__hdr">
-          <h3 class="mg0" id="slideout-left-title">Title</h3>
-          <button class="btn slideout__close" data-close="left" aria-label="Close">✕</button>
-        </header>
-        <div class="slideout__body" id="slideout-left-body"></div>
-      </aside>
-
-      <aside id="panel-right" class="slideout slideout-right" aria-hidden="true" hidden>
-        <header class="slideout__hdr">
-          <h3 class="mg0" id="slideout-right-title">Title</h3>
-          <button class="btn slideout__close" data-close="right" aria-label="Close">✕</button>
-        </header>
-        <div class="slideout__body" id="slideout-right-body"></div>
-      </aside>
-
-      <!-- Graph viewport -->
-      <main id="graph-viewport" class="graph-viewport">
-        <div class="canvas-card">
-          <div class="card-hdr">
-            <h3 class="card-title mg0">Graph</h3>
-          </div>
-          <div class="card-body canvas-body">
-            <div class="canvas-wrap" id="stageWrap">
-              <canvas id="gridCanvas" class="grid-canvas" aria-hidden="true"></canvas>
-              <canvas id="edgeCanvas" class="edge-canvas" aria-hidden="true"></canvas>
-              <div id="nodeLayer" class="node-layer" role="application" aria-label="Nodes layer"></div>
-              <div id="marquee" class="marquee" aria-hidden="true"></div>
-              <canvas id="minimap" class="minimap" aria-hidden="true"></canvas>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      <!-- SETTINGS MODAL -->
-      <div
-        id="settings-modal"
-        class="modal"
-        aria-hidden="true"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="settings-title"
-        hidden>
-        <div class="modal__scrim" data-close="settings"></div>
-        <div class="modal__dialog settings-dialog" role="document">
-          <header class="modal__hdr">
-            <h3 id="settings-title" class="mg0">Settings</h3>
-            <div class="settings-actions">
-              <button class="btn" id="settings-reset">Reset</button>
-              <button class="btn" id="settings-save">Save</button>
-              <button class="btn modal__close" data-close="settings" aria-label="Close settings">✕</button>
-            </div>
-          </header>
-          <div class="settings-layout">
-            <!-- side tabs -->
-            <nav class="settings-tabs" aria-label="Settings sections">
-              <button class="settings-tab active" data-tab="app">App Settings</button>
-              <button class="settings-tab" data-tab="litegraph">Lite Graph</button>
-              <button class="settings-tab" data-tab="appearance">Appearance</button>
-              <hr class="settings-divider" />
-              <button class="settings-tab" data-tab="keybinding">Keybinding</button>
-              <button class="settings-tab" data-tab="extensions">Extensions</button>
-              <button class="settings-tab" data-tab="about">About</button>
-              <button class="settings-tab" data-tab="help">Help</button>
-            </nav>
-
-            <!-- panels -->
-            <section class="settings-panel active" id="panel-app" tabindex="0">
-              <h4>App Settings</h4>
-              <div class="form-grid">
-                <label class="switch">
-                  <input type="checkbox" data-setting="app.showCanvasMenu" />
-                  <span>Show graph canvas menu</span>
-                </label>
-
-                <label>
-                  Canvas navigation mode
-                  <select data-setting="app.navMode">
-                    <option value="drag">Drag Navigating</option>
-                    <option value="pan">Pan Only</option>
-                  </select>
-                </label>
-
-                <label>
-                  Maximum FPS
-                  <input type="number" min="0" step="1" data-setting="app.maxFPS" />
-                </label>
-
-                <label class="switch">
-                  <input type="checkbox" data-setting="app.showInfo" />
-                  <span>Show canvas info (fps etc.)</span>
-                </label>
-
-                <label>
-                  Zoom speed
-                  <input type="number" step="0.1" min="0.1" max="3" data-setting="app.zoomSpeed" />
-                </label>
-              </div>
-            </section>
-
-            <section class="settings-panel" id="panel-litegraph" tabindex="0">
-              <h4>Lite Graph</h4>
-
-              <h5>Canvas</h5>
-              <div class="form-grid">
-                <label>
-                  Low quality rendering zoom threshold
-                  <input type="number" step="0.1" min="0" max="2" data-setting="lg.lowQualityThreshold" />
-                </label>
-
-                <label class="switch">
-                  <input type="checkbox" id="snapToggle" data-setting="lg.snapToGrid" />
-                  <span>Always snap to grid</span>
-                </label>
-
-                <label>
-                  Snap to grid size
-                  <input type="number" id="gridSize" step="1" min="1" data-setting="lg.gridSize" />
-                </label>
-
-                <label class="switch">
-                  <input type="checkbox" data-setting="lg.fastZoomShortcut" />
-                  <span>Enable fast-zoom (Ctrl+Shift+Drag)</span>
-                </label>
-              </div>
-
-              <h5>Graph</h5>
-              <div class="form-grid">
-                <label>
-                  Link render mode
-                  <select data-setting="lg.linkRenderMode">
-                    <option value="straight">Straight</option>
-                    <option value="spline">Spline</option>
-                  </select>
-                </label>
-
-                <label>
-                  Link midpoint markers
-                  <select data-setting="lg.linkMidpointMarkers">
-                    <option value="none">None</option>
-                    <option value="circle">Circle</option>
-                  </select>
-                </label>
-
-                <label>
-                  Reroute spline offset
-                  <input type="number" min="0" step="1" data-setting="lg.rerouteOffset" />
-                </label>
-              </div>
-
-              <h5>Node</h5>
-              <div class="form-grid">
-                <label class="switch">
-                  <input type="checkbox" data-setting="lg.keepLinksOnDelete" />
-                  <span>Keep all links when deleting nodes</span>
-                </label>
-
-                <label class="switch">
-                  <input type="checkbox" data-setting="lg.enableTooltips" />
-                  <span>Enable tooltips</span>
-                </label>
-
-                <label>
-                  Tooltip delay (ms)
-                  <input type="number" min="0" step="50" data-setting="lg.tooltipDelay" />
-                </label>
-              </div>
-            </section>
-
-            <section class="settings-panel" id="panel-appearance" tabindex="0">
-              <h4>Appearance</h4>
-              <div class="form-grid">
-                <label>
-                  Color palette
-                  <select id="themeSelect" data-setting="ui.theme">
-                    <option value="dark">Dark (Default)</option>
-                  </select>
-                </label>
-
-                <label>
-                  Canvas background image URL
-                  <input type="url" placeholder="Image URL" data-setting="ui.canvasBgURL" />
-                </label>
-
-                <label>
-                  Node opacity
-                  <input type="number" min="0.1" max="1" step="0.05" data-setting="ui.nodeOpacity" />
-                </label>
-
-                <label>
-                  Textarea widget font size
-                  <input type="number" min="8" max="32" step="1" data-setting="ui.textareaFont" />
-                </label>
-
-                <label class="switch">
-                  <input type="checkbox" data-setting="ui.unifiedSidebarWidth" />
-                  <span>Unified sidebar width</span>
-                </label>
-
-                <label>
-                  Tree explorer item padding
-                  <input type="number" min="0" max="16" step="1" data-setting="ui.treePadding" />
-                </label>
-              </div>
-            </section>
-
-            <section class="settings-panel" id="panel-keybinding" tabindex="0">
-              <h4>Keybinding</h4>
-              <p>Coming soon…</p>
-            </section>
-
-            <section class="settings-panel" id="panel-extensions" tabindex="0">
-              <h4>Extensions</h4>
-              <p>Coming soon…</p>
-            </section>
-
-            <section class="settings-panel" id="panel-about" tabindex="0">
-              <h4>About</h4>
-              <p>NodeSmith — node-based workflow playground.</p>
-            </section>
-
-            <section class="settings-panel" id="panel-help" tabindex="0">
-              <h4>Help</h4>
-              <p>Need a hand? Ping the Help modal from View → Help.</p>
-            </section>
-          </div>
-
-          <footer class="modal__ftr">
-            <span class="muted">Changes persist automatically when you click Save.</span>
-          </footer>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GridFlow — Visual Node Framework</title>
+  <meta name="theme-color" content="#0a0a0a">
+  <link rel="stylesheet" href="css/theme.css">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'">
+</head>
+<body data-theme="dark">
+  <!-- Sticky Header -->
+  <header class="app-header" role="banner">
+    <div class="brand">GridFlow</div>
+    <nav class="menubar" aria-label="Application Menu">
+      <div class="menu">
+        <button class="menu-btn" aria-haspopup="menu" aria-expanded="false">File</button>
+        <div class="menu-drop" role="menu">
+          <button role="menuitem" id="mFileNew">New</button>
+          <button role="menuitem" id="mFileOpen">Open…</button>
+          <button role="menuitem" id="mFileSave">Save</button>
         </div>
       </div>
+      <div class="menu">
+        <button class="menu-btn" aria-haspopup="menu" aria-expanded="false">Edit</button>
+        <div class="menu-drop" role="menu">
+          <button role="menuitem" id="mEditUndo">Undo</button>
+          <button role="menuitem" id="mEditRedo">Redo</button>
+          <div class="divider"></div>
+          <button role="menuitem" id="mEditCopy">Copy</button>
+          <button role="menuitem" id="mEditPaste">Paste</button>
+          <button role="menuitem" id="mEditDelete">Delete</button>
+        </div>
+      </div>
+      <div class="menu">
+        <button class="menu-btn" aria-haspopup="menu" aria-expanded="false">View</button>
+        <div class="menu-drop" role="menu">
+          <label class="menu-row"><input type="checkbox" id="mViewSnap" checked> Snap to Grid</label>
+          <div class="menu-row">Grid size <input id="mViewGridSize" type="number" min="4" step="2" value="20" style="width:70px;margin-left:8px;"></div>
+          <div class="divider"></div>
+          <label class="menu-row"><input type="checkbox" id="mViewLinks" checked> Show Links</label>
+          <label class="menu-row"><input type="checkbox" id="mViewMinimap" checked> Show Minimap</label>
+          <div class="divider"></div>
+          <div class="menu-row">
+            Theme
+            <select id="mViewTheme" style="margin-left:8px;">
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+              <option value="high-contrast">High Contrast</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </nav>
+  </header>
 
-      <!-- Footer -->
-      <footer class="app-footer" role="contentinfo">
-        <div class="footer-left">
-          <button class="btn" id="footer-run">Run</button>
-          <button class="btn" id="footer-stop">Stop</button>
-          <button class="btn" id="footer-clear">Clear</button>
-        </div>
-        <div class="footer-center">
-          <span id="status-label">Ready</span>
-        </div>
-        <div class="footer-right">
-          <button class="btn icon" id="footer-zoom-fit" title="Fit to View" aria-label="Fit to View">
-            <i class="ti ti-maximize" aria-hidden="true"></i>
-          </button>
-          <span id="footer-zoom-label" class="zoom-label" aria-live="polite">100%</span>
-          <button
-            class="btn icon"
-            id="footer-links-toggle"
-            title="Toggle link visibility"
-            aria-label="Toggle link visibility"
-            aria-pressed="true">
-            <i class="ti ti-eye" aria-hidden="true"></i>
-          </button>
-          <button
-            class="btn icon"
-            id="footer-minimap-toggle"
-            title="Toggle minimap"
-            aria-label="Toggle minimap"
-            aria-pressed="true">
-            <i class="ti ti-map" aria-hidden="true"></i>
-          </button>
-        </div>
-      </footer>
+  <main class="shell">
+    <!-- Left Toolbar -->
+    <aside class="rail left-rail" aria-label="Left toolbar">
+      <button class="rail-btn" data-slide="nodes">
+        <span class="ic" aria-hidden="true">▦</span><span>Nodes</span>
+      </button>
+      <button class="rail-btn" data-slide="workflow">
+        <span class="ic" aria-hidden="true">⤳</span><span>Workflow</span>
+      </button>
+      <button class="rail-btn" data-slide="custom">
+        <span class="ic" aria-hidden="true">✚</span><span>Custom</span>
+      </button>
+      <div class="rail-spacer"></div>
+      <button class="rail-btn" data-slide="settings" title="Settings" aria-label="Settings">
+        <span class="ic" aria-hidden="true">⚙</span><span>Settings</span>
+      </button>
+    </aside>
+
+    <!-- Right Toolbar -->
+    <aside class="rail right-rail" aria-label="Right toolbar">
+      <button class="rail-btn" data-slide="history">
+        <span class="ic" aria-hidden="true">⤺</span><span>History</span>
+      </button>
+      <button class="rail-btn" data-slide="queue">
+        <span class="ic" aria-hidden="true">☰</span><span>Queue</span>
+      </button>
+    </aside>
+
+    <!-- Slideouts -->
+    <section id="slideout-left" class="slideout left">
+      <div class="slide-body" data-panel="nodes">
+        <h2>Basic Nodes</h2>
+        <div id="nodesList" class="list"></div>
+      </div>
+      <div class="slide-body" data-panel="workflow">
+        <h2>Workflow</h2>
+        <p>Coming soon: sequence, branch, join, loop…</p>
+      </div>
+      <div class="slide-body" data-panel="custom">
+        <h2>Custom</h2>
+        <p>Create custom nodes and edit code in a sandbox.</p>
+      </div>
+      <div class="slide-body" data-panel="settings">
+        <h2>Settings</h2>
+        <label class="row">Theme
+          <select id="setTheme">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="high-contrast">High Contrast</option>
+          </select>
+        </label>
+        <label class="row">Grid size
+          <input id="setGridSize" type="number" min="4" step="2" value="20">
+        </label>
+        <label class="row"><input id="setSnap" type="checkbox" checked> Snap to grid</label>
+      </div>
+    </section>
+
+    <section id="slideout-right" class="slideout right">
+      <div class="slide-body" data-panel="history">
+        <h2>History</h2>
+        <div id="historyList" class="list faint">No edits yet.</div>
+      </div>
+      <div class="slide-body" data-panel="queue">
+        <h2>Queue</h2>
+        <div id="queueList" class="list faint">Queue is empty.</div>
+      </div>
+    </section>
+
+    <!-- Center Stage -->
+    <!--
+    <section class="stage-wrap" aria-label="Graph editor" tabindex="0" id="stageWrap">
+      <div id="stageInner" class="stage-inner">
+        <canvas id="gridCanvas" class="grid-canvas" aria-hidden="true"></canvas>
+        <canvas id="edgeCanvas" class="edge-canvas" aria-hidden="true"></canvas>
+        <div id="nodeLayer" class="node-layer" role="application" aria-roledescription="Node editor"></div>
+        <div id="marquee" class="marquee" aria-hidden="true"></div>
+        <div id="toast" class="toast" role="status" aria-live="polite"></div>
+      </div>
+
+      <div id="minimap" class="minimap" aria-label="Mini map" tabindex="0"></div>
+    </section>
+    -->
+    <section class="stage-wrap" id="stageWrap" tabindex="0" aria-label="Graph editor">
+      <!-- Screen-space grid -->
+      <canvas id="gridCanvas" class="grid-canvas" aria-hidden="true"></canvas>
+
+      <!-- World: this is the only thing that pans/zooms -->
+      <div id="stageInner" class="stage-inner">
+        <div id="nodeLayer" class="node-layer" role="application" aria-roledescription="Node editor"></div>
+      </div>
+
+      <!-- Screen-space edges -->
+      <canvas id="edgeCanvas" class="edge-canvas" aria-hidden="true"></canvas>
+
+      <!-- Screen-space UI -->
+      <div id="marquee" class="marquee" aria-hidden="true"></div>
+      <div id="minimap" class="minimap" aria-label="Mini map" tabindex="0">
+        <canvas id="minimapCanvas"></canvas>
+      </div>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <!-- Bottom Toolbar -->
+  <footer class="bottom-bar" role="contentinfo">
+    <div class="bar-left">
+      <button id="btnRun" class="btn solid">Run</button>
+      <button id="btnStop" class="btn">Stop</button>
+      <span id="status" class="status">Ready</span>
     </div>
+    <div class="bar-center">
+      <span class="muted">Graph Floor</span>
+      <div class="sep"></div>
+      <button id="zoomOut" class="btn">−</button>
+      <span id="zoomPct" class="mono">100%</span>
+      <button id="zoomIn" class="btn">+</button>
+      <div class="sep"></div>
+      <label class="toggle"><input id="toggleLinks" type="checkbox" checked> Links</label>
+      <label class="toggle"><input id="toggleMinimap" type="checkbox" checked> Minimap</label>
+    </div>
+    <div class="bar-right">
+      <span id="appVersion">v1.2.0</span>
+    </div>
+  </footer>
 
-    <!-- Slideout content templates -->
-    <template id="tpl-left-nodes">
-      <div class="panel-section">
-        <h4 class="mgT0">Node Palette</h4>
-        <div class="pill-grid">
-          <button class="pill">Math</button>
-          <button class="pill">String</button>
-          <button class="pill">HTTP</button>
-          <button class="pill">Ollama</button>
-        </div>
-        <div class="inline-field mgT10">
-          <label>Search</label>
-          <input type="text" placeholder="Search nodes…"/>
-        </div>
-        <!-- You can render your real node list here -->
+  <!-- Delete confirmation modal -->
+  <div id="confirmModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmDesc">
+    <div class="modal-box">
+      <h3 id="confirmTitle">Delete node?</h3>
+      <p id="confirmDesc">This action cannot be undone.</p>
+      <div class="modal-actions">
+        <button id="confirmCancel" class="btn">Cancel</button>
+        <button id="confirmDelete" class="btn btn-danger"><span class="icon-trash" aria-hidden="true"></span>Delete</button>
       </div>
-    </template>
+    </div>
+    <div class="modal-backdrop"></div>
+  </div>
 
-    <template id="tpl-left-workflows">
-      <div class="panel-section">
-        <h4 class="mgT0">Workflows</h4>
-        <ul class="list">
-          <li><button class="link">Chat Playground</button></li>
-          <li><button class="link">Data Import</button></li>
-          <li><button class="link">Image Pipeline</button></li>
-        </ul>
+  <!-- Properties (Inspector) modal -->
+  <div id="inspectorModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="inspTitle">
+    <div class="modal-box large">
+      <h3 id="inspTitle">Properties</h3>
+      <form id="inspectorForm" class="inspector-form"></form>
+      <div class="modal-actions">
+        <button id="inspClose" class="btn">Close</button>
+        <button id="inspApply" class="btn solid">Apply</button>
       </div>
-    </template>
+    </div>
+    <div class="modal-backdrop"></div>
+  </div>
+  <!-- Context menu root -->
+  <div id="ctx-root" aria-hidden="true"></div>
 
-    <template id="tpl-left-custom">
-      <div class="panel-section">
-        <h4 class="mgT0">Custom</h4>
-        <p class="muted">Add or manage custom nodes.</p>
-        <button class="btn">Open Node Builder</button>
-      </div>
-    </template>
-
-    <template id="tpl-right-history">
-      <div class="panel-section">
-        <h4 class="mgT0">History</h4>
-        <ul class="list">
-          <li>09:42 — Ran graph “Chat Playground”</li>
-          <li>09:31 — Edited node “Ollama Model”</li>
-          <li>09:28 — Imported project</li>
-        </ul>
-      </div>
-    </template>
-
-    <template id="tpl-right-queue">
-      <div class="panel-section">
-        <h4 class="mgT0">Queue</h4>
-        <p class="muted">No jobs in queue.</p>
-      </div>
-    </template>
-
-    <!-- Core & renderer -->
-    <script type="module" src="js/core/store.js"></script>
-    <script type="module" src="js/core/plugins.js"></script>
-    <script type="module" src="js/renderer.js"></script>
-
-    <!-- Panels & UI -->
-    <script type="module" src="js/panels/nodes-panel.js"></script>
-    <script type="module" src="js/ui-bridge.js"></script>
-
-    <!-- Node creation bridges -->
-    <script type="module" src="js/add-node-bridge.js"></script>
-    <script type="module" src="js/node-palette-attach.js"></script>
-
-    <!-- Built-in and custom node packs -->
-    <script type="module" src="js/nodes/builtin.js"></script>
-    <script type="module" src="js/nodes/ollama.js"></script>
-
-    <!-- Auto-discovery loader for packs in /custom-nodes/* -->
-    <script type="module" src="js/custom-nodes.js"></script>
-
-    <!-- Your app last -->
-    <script type="module" src="js/app.js"></script>
-
-  </body>
+  <!-- App Scripts -->
+  <script type="module" src="js/core/store.js"></script>
+  <script type="module" src="js/core/plugins.js"></script>
+  <script type="module" src="js/core/renderer.js"></script>
+  <script type="module" src="js/core/execution.js"></script>
+  <script type="module" src="js/core/persistence.js"></script>
+  <script type="module" src="js/ui/palette.js"></script>
+  <script type="module" src="js/ui/inspector.js"></script>
+  <script type="module" src="js/ui/contextmenu.js"></script>
+  <script type="module" src="js/nodes/starter.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
 </html>

@@ -1,0 +1,23 @@
+{
+    "graph": {
+        "id": "de1c75eb-679a-4b81-a33e-fe662f3cd1b9",
+        "name": "Untitled",
+        "version": "1.2.0",
+        "createdAt": "2025-10-17T15:48:36.542Z",
+        "updatedAt": "2025-10-17T15:48:41+00:00",
+        "settings": {
+            "gridSize": 20,
+            "snapToGrid": true,
+            "theme": "dark"
+        },
+        "viewport": {
+            "x": 0,
+            "y": 0,
+            "zoom": 1
+        },
+        "nodes": [],
+        "wires": [],
+        "groups": [],
+        "metadata": []
+    }
+}

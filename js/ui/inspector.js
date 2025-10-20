@@ -1,69 +1,87 @@
-import { getGraph, subscribe } from "../core/store.js";
-import { resolveOptions } from "../core/plugins.js";
+// Inspector modal: opens on "Properties" menu item
+import { getGraph, transact } from "../core/store.js";
+import { getNodeDefinition } from "../core/plugins.js";
 
-const form = document.getElementById("inspectorForm");
+const modal = document.getElementById("inspectorModal");
+const form  = document.getElementById("inspectorForm");
+const btnClose = document.getElementById("inspClose");
+const btnApply = document.getElementById("inspApply");
 
-function render(){
+let currentNodeId = null;
+
+function open(){ modal.classList.remove("hidden"); btnClose.focus(); }
+function close(){ modal.classList.add("hidden"); currentNodeId = null; form.innerHTML=""; }
+
+btnClose.addEventListener("click",(e)=>{ e.preventDefault(); close(); });
+modal.querySelector(".modal-backdrop").addEventListener("click", close);
+
+window.addEventListener("gridflow:open-properties", (e)=>{
+  const { nodeId } = e.detail || {};
+  currentNodeId = nodeId;
   const g = getGraph();
+  const n = g.nodes.find(x=>x.id===nodeId);
+  if(!n){ return; }
+  const def = getNodeDefinition(n.type) || {};
+  const insp = (n.ui?.inspector || def.inspector || []);
   form.innerHTML = "";
-  // Pick the first focused/selected node for now (simple)
-  const sel = document.querySelector(".node.selected")?.dataset.node;
-  const n = g.nodes.find(x=>x.id===sel);
-  if(!n){ form.innerHTML = "<em>No node selected</em>"; return; }
-  const ui = n.ui || {};
-  const fields = ui.inspector || n.inspector || [];
-  for(const f of fields){
-    const wrap = document.createElement("label");
-    wrap.textContent = f.label || f.key;
-    let input = null;
+  // Title edit
+  const tWrap = document.createElement("label");
+  tWrap.textContent = "Title";
+  const tInput = document.createElement("input");
+  tInput.value = n.title || "";
+  tWrap.appendChild(tInput);
+  form.appendChild(tWrap);
 
-    if(f.type === "select"){
-      input = document.createElement("select");
-      input.disabled = !!(typeof f.options === "string" && f.options.startsWith("async:"));
-      (async ()=>{
-        let opts = [];
-        if(Array.isArray(f.options)) opts = f.options;
-        else if(typeof f.options === "string" && f.options.startsWith("async:")){
-          const key = f.options.split(":")[1];
-          opts = await resolveOptions(key);
-        }
-        input.innerHTML = opts.map(o => {
-          const val = (typeof o === "string") ? o : (o.value ?? o.id ?? o.name);
-          const label = (typeof o === "string") ? o : (o.label ?? o.name ?? val);
-          return `<option value="${String(val)}">${String(label)}</option>`;
-        }).join("");
-        input.disabled = false;
-        input.value = n.state?.[f.key] ?? "";
-      })();
-    }else if(f.type === "toggle"){
-      input = document.createElement("input"); input.type = "checkbox";
-      input.checked = !!n.state?.[f.key];
-    }else if(f.type === "number"){
-      input = document.createElement("input"); input.type="number";
-      input.value = Number(n.state?.[f.key] ?? 0);
-    }else if(f.type === "json" || f.type === "code"){
-      input = document.createElement("textarea"); input.rows = 6;
-      input.value = n.state?.[f.key] ? JSON.stringify(n.state[f.key], null, 2) : "";
-    }else{
-      input = document.createElement("input"); input.type="text";
-      input.value = n.state?.[f.key] ?? "";
+  for(const f of insp){
+    const lab = document.createElement("label");
+    lab.textContent = f.label || f.key;
+    let field;
+    switch(f.type){
+      case "number": field = document.createElement("input"); field.type="number"; field.value = n.state?.[f.key] ?? ""; break;
+      case "select":
+        field = document.createElement("select");
+        (f.options||[]).forEach(opt=>{
+          const o = document.createElement("option");
+          o.value = String(opt?.value ?? opt); o.textContent = String(opt?.label ?? opt);
+          if(String(n.state?.[f.key])===o.value) o.selected = true;
+          field.appendChild(o);
+        });
+        break;
+      case "toggle":
+        field = document.createElement("input"); field.type="checkbox"; field.checked = !!n.state?.[f.key]; break;
+      case "code":
+      case "json":
+        field = document.createElement("textarea"); field.rows = 6; field.value = n.state?.[f.key] ?? ""; break;
+      default:
+        field = document.createElement("input"); field.type="text"; field.value = n.state?.[f.key] ?? "";
     }
-
-    input.addEventListener("change", ()=>{
-      const val = (f.type === "toggle") ? input.checked
-        : (f.type === "number") ? Number(input.value)
-        : (f.type === "json" || f.type === "code") ? safeParse(input.value)
-        : input.value;
-      n.state ||= {};
-      n.state[f.key] = val;
-    });
-
-    wrap.appendChild(input);
-    form.appendChild(wrap);
+    field.dataset.key = f.key;
+    lab.appendChild(field);
+    form.appendChild(lab);
   }
-}
+  open();
+});
 
-function safeParse(s){ try{ return JSON.parse(s); }catch{ return s; } }
-
-subscribe(render);
-window.addEventListener("gridflow:selection-changed", render);
+btnApply.addEventListener("click",(e)=>{
+  e.preventDefault();
+  if(!currentNodeId) return close();
+  const fields = [...form.querySelectorAll("[data-key]")];
+  const title = form.querySelector("label:first-child input")?.value ?? "";
+  transact(g=>{
+    const n = g.nodes.find(x=>x.id===currentNodeId);
+    if(!n) return;
+    n.title = title;
+    n.state = n.state || {};
+    for(const el of fields){
+      const key = el.dataset.key;
+      if(el.type==="checkbox") n.state[key] = el.checked;
+      else if(el.tagName==="TEXTAREA"){
+        if(el.dataset.keyType==="json"){
+          try{ n.state[key] = JSON.parse(el.value); }catch{ n.state[key] = el.value; }
+        }else n.state[key] = el.value;
+      }else if(el.type==="number") n.state[key] = Number(el.value);
+      else n.state[key] = el.value;
+    }
+  }, "Update properties");
+  close();
+});
