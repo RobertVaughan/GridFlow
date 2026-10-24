@@ -1,5 +1,5 @@
 // Starter Nodes + Adapters (standardized with explicit port directions)
-import { registerNode, registerAdapter } from "../core/plugins.js";
+import { registerNode, registerAdapter } from "../core/plugins.js"
 
 /* ---------------- Adapters ---------------- */
 registerAdapter("number","string",(v)=> String(v));
@@ -8,7 +8,7 @@ registerAdapter("string","number",(v)=> parseFloat(v));
 
 /* ---------------- Shared exec pins ---------------- */
 const EXEC_IN  = { id:"exec_in",  name:"Exec In",  direction:"in",  dataType:"exec"  };
-const EXEC_OUT = { id:"exec_out", name:"Exec Out", direction:"out", dataType:"exec" };
+const EXEC_OUT = { id:"exec_out", name:"Exec Out", direction:"out", dataType:"exec", multi:true };
 
 /* ========================================================================== */
 /* FLOW */
@@ -20,7 +20,7 @@ registerNode({
   inputs: [],
   outputs: [
     EXEC_OUT,
-    { id:"tick", name:"Tick", direction:"out", dataType:"any" }
+    { id:"tick", name:"Tick", direction:"out", dataType:"any", multi:true }
   ],
   run: async () => ({ tick: Date.now() })
 });
@@ -44,7 +44,7 @@ registerNode({
   inputs: [ EXEC_IN ],
   outputs: [
     EXEC_OUT,
-    { id:"value", name:"Value", direction:"out", dataType:"integer" }
+    { id:"value", name:"Value", direction:"out", dataType:"integer", multi:true }
   ],
   inspector: [{ key:"value", label:"Value", type:"number" }],
   run: async (ctx) => {
@@ -59,7 +59,7 @@ registerNode({
   inputs: [ EXEC_IN ],
   outputs: [
     EXEC_OUT,
-    { id:"value", name:"Value", direction:"out", dataType:"string" }
+    { id:"value", name:"Value", direction:"out", dataType:"string", multi:true }
   ],
   inspector: [{ key:"text", label:"Text", type:"text" }],
   run: async (ctx) => {
@@ -77,12 +77,12 @@ function math2({ type, title, op }){
     type, title,
     inputs: [
       EXEC_IN,
-      { id:"a", name:"A", direction:"in", dataType:"number", default:0 },
-      { id:"b", name:"B", direction:"in", dataType:"number", default:0 }
+      { id:"a", name:"A", direction:"in", dataType:"number" },
+      { id:"b", name:"B", direction:"in", dataType:"number" }
     ],
     outputs: [
       EXEC_OUT,
-      { id:"result", name:"Result", direction:"out", dataType:"number" }
+      { id:"result", name:"Result", direction:"out", dataType:"number", multi:true }
     ],
     inspector: [{ key:"label", label:"Label", type:"text" }],
     run: async (ctx) => {
@@ -107,12 +107,12 @@ registerNode({
   title: "Concat",
   inputs: [
     EXEC_IN,
-    { id:"a", name:"A", direction:"in", dataType:"string", default:"" },
-    { id:"b", name:"B", direction:"in", dataType:"string", default:"" }
+    { id:"a", name:"A", direction:"in", dataType:"string" },
+    { id:"b", name:"B", direction:"in", dataType:"string" }
   ],
   outputs: [
     EXEC_OUT,
-    { id:"out", name:"Out", direction:"out", dataType:"string" }
+    { id:"out", name:"Out", direction:"out", dataType:"string", multi:true }
   ],
   run: async (ctx) => ({ out: String(ctx.in.a ?? "") + String(ctx.in.b ?? "") })
 });
@@ -126,11 +126,11 @@ registerNode({
   title: "Log",
   inputs: [
     EXEC_IN,
-    { id:"msg", name:"Message", direction:"in", dataType:"any" }
+    { id:"msg", name:"Message", direction:"in", dataType:"any", multi:true }
   ],
   outputs: [
     EXEC_OUT,
-    { id:"out", name:"Out", direction:"out", dataType:"any" }
+    { id:"out", name:"Out", direction:"out", dataType:"any", multi:true }
   ],
   run: async (ctx) => {
     const msg = ctx.in.msg;
@@ -145,7 +145,7 @@ registerNode({
   title: "Text Display",
   inputs: [
     EXEC_IN,
-    { id:"value", name:"Value", direction:"in", dataType:"any" }
+    { id:"value", name:"Value", direction:"in", dataType:"any", multi:true }
   ],
   outputs: [ EXEC_OUT ],
   run: async (ctx) => {
@@ -172,8 +172,8 @@ registerNode({
   ],
   outputs: [
     EXEC_OUT,
-    { id:"status", name:"Status", direction:"out", dataType:"number" },
-    { id:"json",   name:"JSON",   direction:"out", dataType:"any" }
+    { id:"status", name:"Status", direction:"out", dataType:"number", multi:true },
+    { id:"json",   name:"JSON",   direction:"out", dataType:"any", multi:true }
   ],
   inspector: [{ key:"headers", label:"Headers (JSON)", type:"json" }],
   run: async (ctx) => {

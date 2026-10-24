@@ -211,3 +211,10 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system
 .ctxitem.danger:hover { background: #3b1f27; }
 
 .inline-editor-row + .io-cols { margin-top: 6px; }
+
+.port.port-compatible {
+  box-shadow: 0 0 8px 2px var(--accent);
+  border-color: var(--accent);
+  background-color: #1b1f2f;
+  transition: box-shadow 0.1s ease, background-color 0.1s ease;
+}

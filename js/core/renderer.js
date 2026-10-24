@@ -35,6 +35,8 @@ let wiring    = null;      // {from:{nodeId,portId}, kind:"data"|"exec", mouse:{
 let selecting = null;      // marquee
 let isPanning = null;      // middle-mouse pan
 let miniDrag  = null;      // minimap drag
+let resizing  = null;      // {id, el, startW, startH, startX, startY}
+let pendingSize = null;    // {id, width, height}
 
 // Canvases
 const ctxGrid = gridCanvas.getContext("2d");
@@ -47,9 +49,10 @@ const NODE_SHAPE_RADIUS = {
   square: 0
 };
 
-/* ========================================================================== */
-/* Inline editor helpers for generator nodes (util.integer, util.string)      */
-/* ========================================================================== */
+// ==========================================================================
+// Inline editor helpers for generator nodes (util.integer, util.string)
+// ==========================================================================
+// (unchanged; still used)
 const _editDebounce = new Map(); // key: `${nodeId}:${stateKey}`
 
 function setNodeStateDebounced(nodeId, stateKey, nextValue, label = "Edit value", delay = 180){
@@ -85,6 +88,18 @@ export function setMinimapVisible(v){
   if(miniHost) miniHost.style.display = v ? "" : "none";
   drawMinimap();
 }
+
+// Match snap-to-grid to the actually drawn grid spacing.
+// We draw lines at `gridSize * zoom * skip` where skip>=1 when too dense.
+function getEffectiveSnapStep() {
+  const grid = getGraph().settings.gridSize || 20;
+  const z = getZoom() || 1;
+  const minPx = 6;                    // same density guard as drawGrid()
+  const cellPx = grid * z;
+  const skip = cellPx < minPx ? Math.ceil(minPx / cellPx) : 1;
+  return grid * skip;                 // world units
+}
+
 
 // Apply world transform to inner stage
 function applyView(){
@@ -144,29 +159,81 @@ function resizeCanvas(){
 window.addEventListener("resize", resizeCanvas);
 
 // ----------------------------------------------------------------------------
-// Grid (screen-space with phase following world translate)
+// Grid (world-scaled & perfectly aligned to snap; no half-pixel shift)
 // ----------------------------------------------------------------------------
 function drawGrid(){
-  const g = getGraph();
-  const { gridSize } = g.settings;
-  const w = gridCanvas.width, h = gridCanvas.height;
-
+  const g  = getGraph();
   const vp = g.viewport || { x:0, y:0, zoom:1 };
-  const ox = ((vp.x % gridSize) + gridSize) % gridSize;
-  const oy = ((vp.y % gridSize) + gridSize) % gridSize;
+  const z  = vp.zoom || 1;
+  const gridSize = g.settings.gridSize || 20;
 
-  const ctx = ctxGrid;
-  ctx.clearRect(0,0,w,h);
+  // On-screen spacing of one world cell
+  let cell = gridSize * z;
+
+  // Density guard when zoomed far out (draw every Nth line)
+  let skip = 1;
+  const minPx = 6;
+  if (cell < minPx) {
+    skip = Math.ceil(minPx / cell);
+    cell = cell * skip;
+  }
+
+  const ctx  = ctxGrid;
+  const css  = getComputedStyle(document.body);
+  const wCSS = gridCanvas.clientWidth;
+  const hCSS = gridCanvas.clientHeight;
+
+  // Phase so lines are exactly at vp.x + k*cell (screen space)
+  const phaseX = ((vp.x % cell) + cell) % cell;
+  const phaseY = ((vp.y % cell) + cell) % cell;
+
+  // Clear & HiDPI scale
+  ctx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
   ctx.save();
   ctx.scale(devicePixelRatio, devicePixelRatio);
-  const css = getComputedStyle(document.body);
-  ctx.fillStyle = css.getPropertyValue("--grid");
+
+  // Minor grid
+  ctx.strokeStyle = (css.getPropertyValue("--grid").trim() || "#1b1f2a");
+  ctx.lineWidth = 1;
+
+  // Vertical lines
   ctx.beginPath();
-  for(let x = -ox; x < gridCanvas.clientWidth;  x += gridSize) ctx.rect(x, 0, 1, gridCanvas.clientHeight);
-  for(let y = -oy; y < gridCanvas.clientHeight; y += gridSize) ctx.rect(0, y, gridCanvas.clientWidth, 1);
-  ctx.fill();
+  for (let x = phaseX; x < wCSS; x += cell) {
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, hCSS);
+  }
+  // Horizontal lines
+  for (let y = phaseY; y < hCSS; y += cell) {
+    ctx.moveTo(0, y);
+    ctx.lineTo(wCSS, y);
+  }
+  ctx.stroke();
+
+  // Major grid every 5 cells when spacing is comfortable
+  if (cell >= 12) {
+    const majorEvery = 5;
+    const majorCell  = cell * majorEvery;
+    const mPhaseX = ((vp.x % majorCell) + majorCell) % majorCell;
+    const mPhaseY = ((vp.y % majorCell) + majorCell) % majorCell;
+
+    ctx.strokeStyle = ctx.strokeStyle; // same color, lighter alpha
+    ctx.globalAlpha = 0.35;
+    ctx.beginPath();
+    for (let x = mPhaseX; x < wCSS; x += majorCell) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, hCSS);
+    }
+    for (let y = mPhaseY; y < hCSS; y += majorCell) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(wCSS, y);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
   ctx.restore();
 }
+
 
 // ----------------------------------------------------------------------------
 // Edges (screen-space canvas)
@@ -369,11 +436,9 @@ if(miniHost && miniCanvas){
 function computeNodeStyles(n){
   // Determine CSS var reference for color; support "orange" with fallback to theme typo "--node-orage"
   const key = (n.ui?.color || "").toLowerCase().trim();
-  // Construct a safe CSS var() reference or empty string to let theme default show.
   let cssVarRef = "";
   if (key) {
     if (key === "orange") {
-      // Fallback to --node-orange if present, else fallback to --node-orage (as in the provided CSS)
       cssVarRef = "var(--node-orange, var(--node-orage))";
     } else {
       cssVarRef = `var(--node-${key})`;
@@ -413,7 +478,19 @@ function renderNodes(){
     const execIn  = n.inputs.filter(p=>p.dataType==="exec");
     const dataIns = n.inputs.filter(p=>p.dataType!=="exec");
     const execOut = n.outputs.filter(p=>p.dataType==="exec");
-    const dataOut = n.outputs.filter(p=>p.dataType!=="exec");
+    let   dataOut = n.outputs.filter(p=>p.dataType!=="exec");
+
+    // Detect generator nodes with inline editor + inline output
+    const isInt = n.type === "util.integer";
+    const isStr = n.type === "util.string";
+    const inlineOutId = (isInt || isStr)
+      ? (n.outputs.find(p=>p.id==="value")?.id || n.outputs[0]?.id)
+      : null;
+
+    // If we will render an inline output pin, suppress that same port from the right column
+    if(inlineOutId){
+      dataOut = dataOut.filter(p => p.id !== inlineOutId);
+    }
 
     el.innerHTML = `
       <div class="title" draggable="false" style="cursor:${pinned?"not-allowed":"grab"}; background:#1115;
@@ -428,7 +505,7 @@ function renderNodes(){
           ${execOut.length ? `<div class="port exec exec-pin out" data-kind="exec" data-dir="out" data-id="${execOut[0].id}" aria-label="Exec Out"><span>&raquo;&raquo;</span><span class="dot"></span></div>` : `<div></div>`}
         </div>
 
-        <!-- Inline editor row will be injected here for util.integer / util.string -->
+        <!-- Inline editor row injection point -->
 
         <div class="io-cols" style="display:flex;justify-content:space-between;gap:10px;">
           <div class="ports in" style="flex:1;">
@@ -444,61 +521,46 @@ function renderNodes(){
                                 </div>`).join("")}
           </div>
         </div>
-      </div>`;
+      </div>
+      <div class="resize-handle" aria-label="Resize" title="Resize"
+           style="
+             position:absolute; right:6px; bottom:6px;
+             width:14px; height:14px; border:1px solid #0006; border-radius:3px;
+             background:linear-gradient(135deg, #3b3f4a 0%, #2a2f3a 100%);
+             box-shadow: inset 0 1px 0 #ffffff11, 0 1px 2px #0008;
+             cursor:nwse-resize; z-index:5;">
+         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block">
+           <path d="M4 10h6M6 8h4M8 6h2" stroke="#9aa4b2" stroke-width="1.3" stroke-linecap="round"/>
+         </svg>
+      </div>
+    `;
 
-    /* -------- Inline editor injection for generator nodes (util.integer, util.string) -------- */
+    // Inline editor [util.integer | util.string] with inline output pin
     (function attachInlineEditor(){
+      if(!(isInt || isStr)) return;
       const bodyEl = el.querySelector(".body");
       if(!bodyEl) return;
 
-      // Detect supported generator types
-      let editorSpec = null;
-      if(n.type === "util.integer"){
-        const curr = Number.isFinite(Number(n.state?.value)) ? (Number(n.state.value)|0) : 0;
-        editorSpec = {
-          label: "Value",
-          stateKey: "value",
-          inputType: "number",
-          value: String(curr),
-          step: "1",
-          parse: (v)=> {
-            const num = Number(v);
-            return Number.isFinite(num) ? (num|0) : 0;
-          },
-          commitLabel: "Edit Integer"
-        };
-      }else if(n.type === "util.string"){
-        const curr = String(n.state?.text ?? "");
-        editorSpec = {
-          label: "Text",
-          stateKey: "text",
-          inputType: "text",
-          value: curr,
-          step: null,
-          parse: (v)=> String(v ?? ""),
-          commitLabel: "Edit String"
-        };
-      }
-
-      if(!editorSpec) return;
-
-      // Create editor row container after exec row, before io-cols
       const execRow = bodyEl.querySelector(".exec-row");
       const row = document.createElement("div");
       row.className = "inline-editor-row";
       row.style.cssText = "display:flex;align-items:center;gap:8px;margin:6px 0 8px;";
 
+      const currVal = isInt
+        ? (Number.isFinite(Number(n.state?.value)) ? (Number(n.state.value)|0) : 0)
+        : String(n.state?.text ?? "");
+
       row.innerHTML = `
         <input
           class="inline-editor"
-          type="${editorSpec.inputType}"
-          ${editorSpec.step ? `step="${editorSpec.step}"` : ""}
-          value="${editorSpec.value.replace(/"/g, '&quot;')}"
+          type="${isInt ? "number" : "text"}"
+          ${isInt ? 'step="1"' : ""}
+          value="${String(currVal).replace(/"/g, '&quot;')}"
           style="flex:1;background:#111a;border:1px solid #333;color:var(--fg);
                  border-radius:6px;padding:4px 6px;min-height:26px;"
-          aria-label="${editorSpec.label}"
+          aria-label="${isInt ? "Value" : "Text"}"
         />
-        <div class="port" data-kind="data" data-dir="out" data-id="${n.outputs?.[0]?.id || 'value'}"
+        <div class="port" data-kind="data" data-dir="out" data-id="${inlineOutId || 'value'}"
              style="margin-left:6px;display:flex;align-items:center;">
           <span class="dot" aria-hidden="true"></span>
         </div>
@@ -512,14 +574,18 @@ function renderNodes(){
 
       const inp = row.querySelector("input.inline-editor");
       const commit = ()=>{
-        const parsed = editorSpec.parse(inp.value);
-        setNodeStateDebounced(n.id, editorSpec.stateKey, parsed, editorSpec.commitLabel);
+        if(isInt){
+          const num = Number(inp.value);
+          const parsed = Number.isFinite(num) ? (num|0) : 0;
+          setNodeStateDebounced(n.id, "value", parsed, "Edit Integer");
+        }else{
+          setNodeStateDebounced(n.id, "text", String(inp.value ?? ""), "Edit String");
+        }
       };
       inp.addEventListener("input", commit);
       inp.addEventListener("change", commit);
       inp.addEventListener("blur", commit);
     })();
-    /* ----------------------------------------------------------------------------------------- */
 
     // Selection click
     el.addEventListener("pointerdown", e => {
@@ -553,6 +619,26 @@ function renderNodes(){
       }
     });
 
+    // Resize handle (anchored bottom-right)
+    const rh = el.querySelector(".resize-handle");
+    rh.addEventListener("pointerdown", (e)=>{
+      if(e.button !== 0) return;
+      e.preventDefault();
+      try { rh.setPointerCapture(e.pointerId); } catch {}
+      const z = getZoom();
+      const rect = nodeLayer.getBoundingClientRect();
+      resizing = {
+        id: n.id,
+        el,
+        startW: (n.width || el.offsetWidth),
+        startH: (n.height || el.offsetHeight),
+        startX: (e.clientX - rect.left) / z,
+        startY: (e.clientY - rect.top ) / z
+      };
+      document.body.style.cursor = "nwse-resize";
+      document.body.style.userSelect = "none";
+    });
+
     // Wiring
     el.querySelectorAll(".port").forEach(port => {
       port.addEventListener("pointerdown", e => {
@@ -560,6 +646,8 @@ function renderNodes(){
         const dir = port.dataset.dir;
         const portId = port.dataset.id;
         const kind = port.dataset.kind || "data";
+
+        // Start wiring from an output: track and highlight compatible inputs
         if(dir === "out"){
           wiring = {
             kind,
@@ -569,8 +657,10 @@ function renderNodes(){
               y: e.clientY - edgeCanvas.getBoundingClientRect().top
             }
           };
+          highlightCompatibleInputs(n.id, portId, kind); // 🔹 add highlight
         }
       });
+
       port.addEventListener("pointerup", e => {
         if(!wiring) return;
         const dir = port.dataset.dir;
@@ -581,7 +671,9 @@ function renderNodes(){
           const ev = new CustomEvent("gridflow:wire-attempt", { detail: { from: wiring.from, to: drop, kind } });
           window.dispatchEvent(ev);
         }
-        wiring = null; drawEdges();
+        clearPortHighlights(); // 🔹 remove highlight
+        wiring = null; 
+        drawEdges();
       });
     });
 
@@ -598,6 +690,63 @@ function finalizeDragCommit(){
     if(node){ node.x = x; node.y = y; }
   }, "Move node");
   drawEdges();
+}
+
+function finalizeResizeCommit(){
+  if(!pendingSize) return;
+  const { id, width, height } = pendingSize;
+  pendingSize = null;
+  transact(g=>{
+    const node = g.nodes.find(nn=>nn.id===id);
+    if(node){
+      node.width  = Math.max(140, Math.floor(width));
+      node.height = Math.max(72,  Math.floor(height));
+    }
+  }, "Resize node");
+  drawEdges();
+  drawMinimap();
+}
+
+// ----------------------------------------------------------------------------
+// Port compatibility highlighting
+// ----------------------------------------------------------------------------
+function clearPortHighlights(){
+  document.querySelectorAll(".port-compatible").forEach(p => p.classList.remove("port-compatible"));
+}
+
+function highlightCompatibleInputs(fromNodeId, fromPortId, kind){
+  clearPortHighlights();
+
+  const g = getGraph();
+  const fromNode = g.nodes.find(n => n.id === fromNodeId);
+  if(!fromNode) return;
+
+  // choose the correct collection to locate the 'from' port (out port)
+  const fromPort = (kind === "exec")
+    ? fromNode.outputs.find(p => p.id === fromPortId && p.dataType === "exec")
+    : fromNode.outputs.find(p => p.id === fromPortId && p.dataType !== "exec");
+
+  if(!fromPort) return;
+
+  // Highlight every input that is compatible by type (and by exec/data kind)
+  document.querySelectorAll(`.port[data-dir='in']`).forEach(pEl => {
+    const pKind = pEl.dataset.kind || "data";
+    if(pKind !== kind) return; // only same kind (exec with exec, data with data)
+
+    const nodeEl = pEl.closest(".node");
+    const nodeId = nodeEl?.dataset.node;
+    if(!nodeId) return;
+
+    const targetNode = g.nodes.find(n => n.id === nodeId);
+    if(!targetNode) return;
+
+    const targetPort = targetNode.inputs.find(pp => pp.id === pEl.dataset.id);
+    if(!targetPort) return;
+
+    if (isPortCompatible(fromPort, targetPort)) {
+      pEl.classList.add("port-compatible");
+    }
+  });
 }
 
 // ----------------------------------------------------------------------------
@@ -617,18 +766,51 @@ window.addEventListener("gridflow:selection-changed", () => {
 });
 
 // ----------------------------------------------------------------------------
-// Global pointer handling (drag/move/wire/marquee/pan)
+// Global pointer handling (drag/move/resize/wire/marquee/pan)
 // ----------------------------------------------------------------------------
 window.addEventListener("pointermove", e => {
   const z = getZoom();
+
+  // Resizing node (anchored bottom-right)
+  if(resizing){
+    const rect = nodeLayer.getBoundingClientRect();
+    const pxw = (e.clientX - rect.left) / z;
+    const pyw = (e.clientY - rect.top ) / z;
+
+    let w = resizing.startW + (pxw - resizing.startX);
+    let h = resizing.startH + (pyw - resizing.startY);
+
+    const step = getEffectiveSnapStep();
+    if (getGraph().settings.snapToGrid) {
+      w = Math.round(w / step) * step;
+      h = Math.round(h / step) * step;
+    }
+
+    w = Math.max(140, w);
+    h = Math.max(72,  h);
+
+    resizing.el.style.width  = w + "px";
+    resizing.el.style.height = h + "px";
+    pendingSize = { id: resizing.id, width: w, height: h };
+
+    // Edges should follow while resizing
+    drawEdges();
+    return;
+  }
 
   // Dragging node
   if(dragging){
     const wrapRect = nodeLayer.getBoundingClientRect();
     let nx = (e.clientX - wrapRect.left)/z - dragging.offsetXw;
     let ny = (e.clientY - wrapRect.top )/z - dragging.offsetYw;
-    const grid = getGraph().settings.gridSize;
-    if(getGraph().settings.snapToGrid){ nx = snap(nx, grid); ny = snap(ny, grid); }
+
+    // Snap aligned with drawn grid
+    if (getGraph().settings.snapToGrid) {
+      const step = getEffectiveSnapStep();
+      nx = Math.round(nx / step) * step;
+      ny = Math.round(ny / step) * step;
+    }
+
     dragging.el.style.left = nx + "px";
     dragging.el.style.top  = ny + "px";
     pendingCommit = { id: dragging.id, x: nx, y: ny };
@@ -667,6 +849,13 @@ window.addEventListener("pointermove", e => {
 });
 
 window.addEventListener("pointerup", (e) => {
+  if(resizing){
+    try { /* release pointer if captured by handle */ } catch {}
+    finalizeResizeCommit();
+    resizing = null;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+  }
   if(dragging){ finalizeDragCommit(); dragging = null; document.body.style.userSelect = ""; }
   if(selecting){
     const r = marquee.getBoundingClientRect();
@@ -681,14 +870,20 @@ window.addEventListener("pointerup", (e) => {
     else setSelection(ids);
     selecting = null;
   }
-  if(wiring){ wiring = null; drawEdges(); }
+  if(wiring){ clearPortHighlights(); wiring = null; drawEdges(); }
   endPan(e);
 });
 
 window.addEventListener("pointercancel", (e) => {
+  if(resizing){
+    finalizeResizeCommit();
+    resizing = null;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+  }
   if(dragging){ finalizeDragCommit(); dragging = null; document.body.style.userSelect = ""; }
   if(selecting){ marquee.style.display="none"; selecting=null; }
-  if(wiring){ wiring = null; drawEdges(); }
+  if(wiring){ clearPortHighlights(); wiring = null; drawEdges(); }
   endPan(e);
 });
 
@@ -764,3 +959,15 @@ modal?.querySelector(".modal-backdrop")?.addEventListener("click", closeModal);
 btnDel?.addEventListener("click", (e)=>{ e.preventDefault(); if(pendingDeleteNodeId){ removeNode(pendingDeleteNodeId); } closeModal(); });
 
 // Initial paint is triggered by resize + subscribe + applyView
+
+// ----------------------------------------------------------------------------
+// Wire connection handler
+// ----------------------------------------------------------------------------
+import { validateAndConnect } from "./plugins.js";
+
+window.addEventListener("gridflow:wire-attempt", (e) => {
+  const { from, to, kind } = e.detail || {};
+  if (!from || !to) return;
+  const result = validateAndConnect(from, to, kind);
+  if (result?.ok) drawEdges(); // redraw if connected successfully
+});
